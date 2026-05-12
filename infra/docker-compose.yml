@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: abhimart-postgres
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: abhimart
+      POSTGRES_PASSWORD: abhimart_pass
+      POSTGRES_DB: abhimart
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U abhimart"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:
