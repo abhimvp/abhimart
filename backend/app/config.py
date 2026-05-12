@@ -32,6 +32,13 @@ class Settings(BaseSettings):
     APP_NAME: str = "AbhiMart"
     APP_VERSION: str = "0.1.0"
 
+    # --- AI ---
+    GEMINI_API_KEY: str
+    LANGSMITH_TRACING: bool = False
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = "abhimart"
+    LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
+
 
 @lru_cache
 def get_settings() -> Settings:

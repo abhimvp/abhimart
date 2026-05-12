@@ -14,14 +14,24 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-
+from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.database import engine
 from app.api.v1.products import router as products_router
+from app.api.v1.chat import router as chat_router
+import os
 
+# Must be set in os.environ — LangSmith SDK reads these directly,
+# not from our settings object.
+from app.config import get_settings
 
 logger = structlog.get_logger()
-settings = get_settings()
+
+_settings = get_settings()
+os.environ["LANGSMITH_TRACING"] = str(_settings.LANGSMITH_TRACING).lower()
+os.environ["LANGSMITH_API_KEY"] = _settings.LANGSMITH_API_KEY
+os.environ["LANGSMITH_PROJECT"] = _settings.LANGSMITH_PROJECT
+os.environ["LANGSMITH_ENDPOINT"] = _settings.LANGSMITH_ENDPOINT
 
 
 @asynccontextmanager
@@ -36,7 +46,7 @@ async def lifespan(app: FastAPI):
       first user request fails 30 seconds later.
     """
     # --- Startup ---
-    logger.info("Starting AbhiMart backend", version=settings.APP_VERSION)
+    logger.info("Starting AbhiMart backend", version=_settings.APP_VERSION)
 
     # Verify database is reachable
     async with engine.begin() as conn:
@@ -52,8 +62,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
+    title=_settings.APP_NAME,
+    version=_settings.APP_VERSION,
     description="AI customer support agent for AbhiMart e-commerce",
     lifespan=lifespan,
 )
@@ -68,6 +78,8 @@ app.add_middleware(
 )
 
 app.include_router(products_router, prefix="/v1")
+app.include_router(chat_router, prefix="/v1")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 
 @app.get("/health")
@@ -79,6 +91,6 @@ async def health_check():
     """
     return {
         "status": "ok",
-        "app": settings.APP_NAME,
-        "version": settings.APP_VERSION,
+        "app": _settings.APP_NAME,
+        "version": _settings.APP_VERSION,
     }
