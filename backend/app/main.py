@@ -17,6 +17,8 @@ from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import engine
+from app.api.v1.products import router as products_router
+
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -64,6 +66,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(products_router, prefix="/v1")
 
 
 @app.get("/health")
