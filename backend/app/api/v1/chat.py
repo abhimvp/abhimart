@@ -16,17 +16,20 @@ them to the UI — that's how streaming chat works.
 Conversation memory: stored in-process as a dict keyed by session_id.
 Not durable — server restart loses history. Stage 2 replaces this
 with LangGraph's Postgres checkpointer.
-"""
 
-"""Chat API route — Stage 1."""
+Chat API route — Stage 2.
+
+POST /v1/chat
+- Accepts a user message + session_id
+- Runs it through the LangGraph agent (Postgres-backed memory)
+- Streams the response token-by-token via SSE
+"""
 
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-
-from app.agents.customer_support.graph import graph
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -36,11 +39,8 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
-async def event_stream(message: str, session_id: str):
-    # thread_id tells LangGraph which conversation to resume
+async def event_stream(graph, message: str, session_id: str):
     config = {"configurable": {"thread_id": session_id}}
-
-    # Only pass the NEW message — LangGraph loads prior history automatically
     inputs = {"messages": [{"role": "user", "content": message}]}
 
     async for event in graph.astream_events(inputs, config=config, version="v2"):
@@ -63,12 +63,25 @@ async def event_stream(message: str, session_id: str):
 
 
 @router.post("")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, req: Request):
+    graph = req.app.state.graph
     return StreamingResponse(
-        event_stream(request.message, request.session_id),
+        event_stream(graph, request.message, request.session_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
     )
+    
+@router.get("/history/{session_id}")
+async def get_history(session_id: str, req: Request):
+    graph = req.app.state.graph
+    config = {"configurable": {"thread_id": session_id}}
+    state = await graph.aget_state(config)
+    return {
+        "messages": [
+            {"role": m.type, "content": m.content}
+            for m in state.values["messages"]
+        ]
+    }

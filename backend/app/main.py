@@ -36,24 +36,25 @@ os.environ["LANGSMITH_ENDPOINT"] = _settings.LANGSMITH_ENDPOINT
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager.
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    from app.agents.customer_support.graph import build_graph
 
-    This is a context manager — the code before 'yield' runs at startup,
-    the code after 'yield' runs at shutdown.
-
-    Why check DB on startup?
-    - If Postgres is down, we want to know immediately, not when the
-      first user request fails 30 seconds later.
-    """
-    # --- Startup ---
     logger.info("Starting AbhiMart backend", version=_settings.APP_VERSION)
 
-    # Verify database is reachable
+    # Verify app database is reachable
     async with engine.begin() as conn:
         await conn.execute(text("SELECT 1"))
     logger.info("Database connection verified")
 
-    yield  # App is running and serving requests between here...
+    # Wire up Postgres checkpointer for durable conversation memory
+    async with AsyncPostgresSaver.from_conn_string(
+        _settings.CHECKPOINT_DATABASE_URL
+    ) as checkpointer:
+        await checkpointer.setup()  # creates LangGraph checkpoint tables (idempotent)
+        app.state.graph = build_graph(checkpointer)
+        logger.info("LangGraph checkpointer ready")
+
+        yield  # app serves requests here
 
     # --- Shutdown ---
     logger.info("Shutting down AbhiMart backend")

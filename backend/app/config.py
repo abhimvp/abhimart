@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
 
     # --- AI ---
+    CHECKPOINT_DATABASE_URL: str
     GEMINI_API_KEY: str
     LANGSMITH_TRACING: bool = False
     LANGSMITH_API_KEY: str = ""

@@ -15,7 +15,11 @@ import asyncio
 
 import structlog
 from sqlalchemy import delete
-
+import uuid
+from decimal import Decimal
+from sqlalchemy import delete
+from app.models.user import User
+from app.models.order import Order
 from app.database import async_session_factory
 from app.models.product import Product
 
@@ -224,27 +228,167 @@ SEED_PRODUCTS = [
     },
 ]
 
+SEED_USERS = [
+    {"name": "Arjun Sharma", "email": "arjun@example.com"},
+    {"name": "Priya Patel", "email": "priya@example.com"},
+    {"name": "Rohit Verma", "email": "rohit@example.com"},
+    {"name": "Sneha Reddy", "email": "sneha@example.com"},
+    {"name": "Vikram Nair", "email": "vikram@example.com"},
+]
+
+SEED_ORDERS = [
+    {
+        "email": "arjun@example.com",
+        "status": "delivered",
+        "total": 1299.99,
+        "items": [{"product_name": "iPhone 16 Pro Max", "qty": 1, "price": 1199.99}],
+    },
+    {
+        "email": "arjun@example.com",
+        "status": "shipped",
+        "total": 349.99,
+        "items": [
+            {"product_name": "Sony WH-1000XM5 Headphones", "qty": 1, "price": 349.99}
+        ],
+    },
+    {
+        "email": "arjun@example.com",
+        "status": "pending",
+        "total": 99.99,
+        "items": [
+            {"product_name": "Logitech MX Master 3S Mouse", "qty": 1, "price": 99.99}
+        ],
+    },
+    {
+        "email": "priya@example.com",
+        "status": "delivered",
+        "total": 120.00,
+        "items": [{"product_name": "Manduka PRO Yoga Mat", "qty": 1, "price": 120.00}],
+    },
+    {
+        "email": "priya@example.com",
+        "status": "delivered",
+        "total": 63.98,
+        "items": [
+            {"product_name": "Atomic Habits by James Clear", "qty": 2, "price": 18.99},
+            {"product_name": "Leuchtturm1917 A5 Notebook", "qty": 1, "price": 24.99},
+        ],
+    },
+    {
+        "email": "priya@example.com",
+        "status": "cancelled",
+        "total": 499.99,
+        "items": [{"product_name": "Theragun PRO Plus", "qty": 1, "price": 499.99}],
+    },
+    {
+        "email": "rohit@example.com",
+        "status": "shipped",
+        "total": 2499.99,
+        "items": [
+            {"product_name": "MacBook Pro 16-inch M3 Max", "qty": 1, "price": 2499.99}
+        ],
+    },
+    {
+        "email": "rohit@example.com",
+        "status": "delivered",
+        "total": 619.99,
+        "items": [
+            {"product_name": "Dell UltraSharp 27 4K Monitor", "qty": 1, "price": 619.99}
+        ],
+    },
+    {
+        "email": "rohit@example.com",
+        "status": "pending",
+        "total": 44.99,
+        "items": [
+            {
+                "product_name": "Designing Data-Intensive Applications",
+                "qty": 1,
+                "price": 44.99,
+            }
+        ],
+    },
+    {
+        "email": "sneha@example.com",
+        "status": "delivered",
+        "total": 749.99,
+        "items": [
+            {"product_name": "Dyson V15 Detect Vacuum", "qty": 1, "price": 749.99}
+        ],
+    },
+    {
+        "email": "sneha@example.com",
+        "status": "pending",
+        "total": 999.99,
+        "items": [
+            {
+                "product_name": "Dyson Purifier Big Quiet Formaldehyde",
+                "qty": 1,
+                "price": 999.99,
+            }
+        ],
+    },
+    {
+        "email": "vikram@example.com",
+        "status": "delivered",
+        "total": 429.99,
+        "items": [
+            {
+                "product_name": "Bowflex SelectTech 552 Dumbbells",
+                "qty": 1,
+                "price": 429.99,
+            }
+        ],
+    },
+    {
+        "email": "vikram@example.com",
+        "status": "shipped",
+        "total": 3495.00,
+        "items": [
+            {"product_name": "Peloton Tread+ Treadmill", "qty": 1, "price": 3495.00}
+        ],
+    },
+]
+
 
 async def seed() -> None:
-    """Clear existing products and insert seed data."""
+    """Clear and re-seed all tables."""
     async with async_session_factory() as session:
-        # Delete all existing products (clean slate)
+        # Delete in FK-safe order: orders → users → products
+        await session.execute(delete(Order))
+        await session.execute(delete(User))
         await session.execute(delete(Product))
-        logger.info("Cleared existing products")
+        logger.info("Cleared existing data")
 
-        # Insert seed products
+        # Seed products
         products = [Product(**data) for data in SEED_PRODUCTS]
         session.add_all(products)
+
+        # Seed users
+        users = [User(id=uuid.uuid4(), **u) for u in SEED_USERS]
+        session.add_all(users)
+        await session.flush()  # need user IDs before creating orders
+
+        # Seed orders
+        user_map = {u.email: u.id for u in users}
+        orders = [
+            Order(
+                id=uuid.uuid4(),
+                user_id=user_map[o["email"]],
+                status=o["status"],
+                total_amount=Decimal(str(o["total"])),
+                items=o["items"],
+            )
+            for o in SEED_ORDERS
+        ]
+        session.add_all(orders)
         await session.commit()
 
-        # Summary
         logger.info(
             "Seed complete",
-            total=len(products),
-            categories={
-                cat: sum(1 for p in SEED_PRODUCTS if p["category"] == cat)
-                for cat in ["electronics", "appliances", "fitness", "books"]
-            },
+            products=len(products),
+            users=len(users),
+            orders=len(orders),
         )
 
 

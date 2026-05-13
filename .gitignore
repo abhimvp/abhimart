@@ -220,3 +220,6 @@ __marimo__/
 # Implementation docs
 .claude/
 docs/implementation_docs/
+
+.vscode/
+queries.sql

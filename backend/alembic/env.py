@@ -32,6 +32,21 @@ if config.config_file_name is not None:
 # in your Python code vs what's in the database.
 target_metadata = Base.metadata
 
+LANGGRAPH_TABLES = {
+    "checkpoints",
+    "checkpoint_blobs",
+    "checkpoint_writes",
+    "checkpoint_migrations",
+}
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    """Tell Alembic to ignore LangGraph's checkpoint tables."""
+    if type_ == "table" and name in LANGGRAPH_TABLES:
+        return False
+    return True
+
+
 # Override the sqlalchemy.url with our pydantic-settings value.
 # This is why alembic.ini doesn't have a hardcoded URL.
 settings = get_settings()
@@ -60,6 +75,7 @@ def do_run_migrations(connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
+        include_object=include_object,
     )
     with context.begin_transaction():
         context.run_migrations()

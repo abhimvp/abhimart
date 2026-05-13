@@ -7,5 +7,7 @@ Import all models here so that:
 
 from app.models.base import Base
 from app.models.product import Product
+from app.models.user import User
+from app.models.order import Order
 
-__all__ = ["Base", "Product"]
+__all__ = ["Base", "Product", "User", "Order"]
