@@ -18,7 +18,7 @@ tools = [lookup_order, get_product_info, search_faq]
 # --- Model bound with tools ---
 # bind_tools tells the LLM what tools exist and their schemas.
 # The LLM can then respond with a tool_call instead of text.
-llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.7)
+llm = ChatGoogleGenerativeAI(model="gemini-3.1-flash-lite", temperature=0.7)
 llm_with_tools = llm.bind_tools(tools)
 
 # --- System prompt ---
@@ -32,7 +32,15 @@ You have access to three tools:
 
 Always be polite and concise. If a customer asks about their orders,
 ask for their email address first before calling lookup_order.
-When answering policy questions, always cite the source document."""
+When answering policy questions:
+- Use search_faq before answering.
+- Treat retrieved policy text as the source of truth.
+- Apply all eligibility conditions, not just the headline rule.
+- If the customer describes a condition that may violate policy, say it may not be eligible instead of giving a blanket yes.
+- If the customer says an item was opened, used, installed, assembled, damaged, or missing packaging/accessories, explicitly address that condition against the policy's eligibility rules.
+- If policy requires an item to be unused/original condition and the customer says they used it, do not say it is eligible. Say it may not be eligible, then explain the condition.
+- Cite source filenames exactly as they appear in retrieved content, for example: [Source: return-policy.md].
+"""
 
 
 # --- Nodes ---
