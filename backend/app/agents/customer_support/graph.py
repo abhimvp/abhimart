@@ -7,13 +7,13 @@ from langgraph.graph import StateGraph, START, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from app.config import get_settings
-from app.agents.customer_support.tools import lookup_order, get_product_info
+from app.agents.customer_support.tools import lookup_order, get_product_info, search_faq
 
 settings = get_settings()
 os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
 
 # --- Tools ---
-tools = [lookup_order, get_product_info]
+tools = [lookup_order, get_product_info, search_faq]
 
 # --- Model bound with tools ---
 # bind_tools tells the LLM what tools exist and their schemas.
@@ -22,15 +22,17 @@ llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash-lite", temperature=0.7)
 llm_with_tools = llm.bind_tools(tools)
 
 # --- System prompt ---
-SYSTEM_PROMPT = """You are a helpful customer support agent for AbhiMart, 
+SYSTEM_PROMPT = """You are a helpful customer support agent for AbhiMart,
 an e-commerce store selling electronics, appliances, fitness gear, and books.
 
-You have access to two tools:
+You have access to three tools:
 - lookup_order: fetch a customer's order history (requires their email)
 - get_product_info: fetch product details from the catalog
+- search_faq: search AbhiMart's knowledge base for policies, FAQs, and shipping info
 
-Always be polite and concise. If a customer asks about their orders, 
-ask for their email address first before calling lookup_order."""
+Always be polite and concise. If a customer asks about their orders,
+ask for their email address first before calling lookup_order.
+When answering policy questions, always cite the source document."""
 
 
 # --- Nodes ---
