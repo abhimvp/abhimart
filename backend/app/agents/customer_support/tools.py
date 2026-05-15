@@ -4,14 +4,18 @@ from langchain_core.tools import tool
 from sqlalchemy import select
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_postgres import PGVector
+from pathlib import Path
 from app.database import async_session_factory
 from app.models.order import Order
 from app.models.product import Product
 from app.models.user import User
 from app.config import get_settings
+from app.agents.customer_support.policy import classify_return_eligibility
 import asyncio
+import json
 
 _settings = get_settings()
+_DOCS_DIR = Path(__file__).resolve().parents[2] / "rag" / "docs"
 
 
 @tool
@@ -117,6 +121,11 @@ _vector_store = PGVector(
 )
 
 
+async def _retrieve_knowledge_docs(query: str, *, k: int = 3):
+    """Retrieve knowledge-base chunks from pgvector."""
+    return await asyncio.to_thread(_vector_store.similarity_search, query, k)
+
+
 @tool
 async def search_faq(query: str) -> str:
     """Search AbhiMart's knowledge base for policy and FAQ information.
@@ -134,7 +143,7 @@ async def search_faq(query: str) -> str:
         query: The customer's question or topic to search for
     """
     # Retrieve top 3 most relevant chunks
-    docs = await asyncio.to_thread(_vector_store.similarity_search, query, 3)
+    docs = await _retrieve_knowledge_docs(query, k=3)
 
     if not docs:
         return "No relevant information found in the knowledge base."
@@ -155,3 +164,53 @@ async def search_faq(query: str) -> str:
 
 {retrieved}
 </retrieved_content>"""
+
+
+@tool
+async def assess_return_eligibility(customer_question: str) -> str:
+    """Assess return eligibility using AbhiMart's return policy.
+
+    Use this when the customer asks whether an item can be returned or whether
+    their situation is eligible for a return/refund under policy. This tool
+    retrieves the relevant return policy and returns a structured eligibility
+    decision.
+
+    Args:
+        customer_question: The customer's return/refund eligibility question.
+    """
+    docs = await _retrieve_knowledge_docs(
+        f"return policy eligibility {customer_question}",
+        k=3,
+    )
+
+    return_policy_docs = [
+        doc for doc in docs if doc.metadata.get("source") == "return-policy.md"
+    ]
+    policy_docs = return_policy_docs or docs
+
+    if not policy_docs:
+        return json.dumps(
+            {
+                "decision": "need_more_info",
+                "reason": "No relevant return policy text was found.",
+                "source": "unknown",
+                "confidence": "low",
+            }
+        )
+
+    source = "return-policy.md"
+    full_return_policy_path = _DOCS_DIR / source
+
+    if full_return_policy_path.exists():
+        policy_text = full_return_policy_path.read_text(encoding="utf-8")
+    else:
+        source = policy_docs[0].metadata.get("source", "unknown")
+        policy_text = "\n\n".join(doc.page_content for doc in policy_docs)
+
+    decision = await classify_return_eligibility(
+        customer_question=customer_question,
+        policy_text=policy_text,
+        source=source,
+    )
+
+    return json.dumps(decision.model_dump(), ensure_ascii=False)

@@ -7,13 +7,18 @@ from langgraph.graph import StateGraph, START, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from app.config import get_settings
-from app.agents.customer_support.tools import lookup_order, get_product_info, search_faq
+from app.agents.customer_support.tools import (
+    lookup_order,
+    get_product_info,
+    search_faq,
+    assess_return_eligibility,
+)
 
 settings = get_settings()
 os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
 
 # --- Tools ---
-tools = [lookup_order, get_product_info, search_faq]
+tools = [lookup_order, get_product_info, search_faq, assess_return_eligibility]
 
 # --- Model bound with tools ---
 # bind_tools tells the LLM what tools exist and their schemas.
@@ -29,11 +34,14 @@ You have access to three tools:
 - lookup_order: fetch a customer's order history (requires their email)
 - get_product_info: fetch product details from the catalog
 - search_faq: search AbhiMart's knowledge base for policies, FAQs, and shipping info
+- assess_return_eligibility: retrieve return policy and classify return eligibility
 
 Always be polite and concise. If a customer asks about their orders,
 ask for their email address first before calling lookup_order.
 When answering policy questions:
 - Use search_faq before answering.
+- For return/refund eligibility questions, use assess_return_eligibility before answering.
+- When assess_return_eligibility returns a structured decision, do not print the raw JSON. Use the decision, reason, and source to write a concise customer-facing answer.
 - Treat retrieved policy text as the source of truth.
 - Apply all eligibility conditions, not just the headline rule.
 - If the customer describes a condition that may violate policy, say it may not be eligible instead of giving a blanket yes.

@@ -15,8 +15,10 @@ The local eval harness lives in `backend/evals/`.
 backend/evals/
 ├── datasets/
 │   └── stage4_golden.jsonl
+│   └── policy_decision_golden.jsonl
 ├── run_eval.py
 ├── score_results.py
+├── run_policy_decision_eval.py
 ├── langsmith_dataset.py
 └── langsmith_run.py
 ```
@@ -127,25 +129,44 @@ As of May 15, 2026:
 | Eval mode | Result |
 |---|---:|
 | Local deterministic evals | 8/8 passing |
-| LangSmith latest inspected experiment | 7/8 passing |
+| LangSmith latest inspected experiment | 8/8 passing |
+| Structured policy decision evals | 3/3 passing |
 
-The known failing/flaky case is:
+The previously flaky case was:
 
 ```text
 policy_return_electronics_001
 ```
 
 This case asks whether opened Sony headphones used for a week can be returned.
-The agent usually retrieves and cites the correct return policy, but can still
-occasionally answer too permissively by saying the item may be eligible despite
-the policy requiring original/unused condition.
+The agent retrieved and cited the correct return policy, but earlier versions
+could answer too permissively by saying the item may be eligible despite the
+policy requiring original/unused condition. This was a policy-reasoning/
+synthesis issue, not a retrieval failure.
 
-This is a policy-reasoning/synthesis issue, not a retrieval failure.
+To reduce this variability, AbhiMart now has a structured policy eligibility
+classifier in `app/agents/customer_support/policy.py` and a higher-level
+`assess_return_eligibility` tool in `app/agents/customer_support/tools.py`.
+
+It classifies return-policy situations as:
+
+- `eligible`
+- `likely_not_eligible`
+- `need_more_info`
+
+This creates an explicit intermediate business decision before generating a
+customer-facing answer. The classifier is evaluated separately with
+`policy_decision_golden.jsonl` and `run_policy_decision_eval.py`, and the full
+agent eval now requires return-eligibility questions to use
+`assess_return_eligibility`.
+
+The streaming layer also filters nested model events so structured-output model
+calls inside tools are not leaked to the customer-facing SSE response.
 
 ## Next Improvements
 
 - Add structured policy eligibility decisions:
-  `eligible`, `likely_not_eligible`, or `need_more_info`.
+- Rerun LangSmith experiments after structured eligibility tool wiring.
 - Compare prompt/model versions in LangSmith.
 - Add LLM-as-judge only for semantic checks that deterministic rules cannot
   capture cleanly.

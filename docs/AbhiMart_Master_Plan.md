@@ -1017,6 +1017,15 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Added `langsmith_run.py` to run the real LangGraph agent as a LangSmith experiment with deterministic evaluator scoring.
 - Latest inspected LangSmith experiments ran all 8 examples successfully; deterministic scores exposed expected model variability in the return-policy used-item case.
 - Added public-facing `docs/evaluation.md` documenting the eval harness, local commands, LangSmith workflow, current baseline, and known flaky policy-reasoning case.
+- Added structured policy eligibility classifier in `app/agents/customer_support/policy.py`.
+- Added subcomponent evals for the policy classifier:
+  - `datasets/policy_decision_golden.jsonl`
+  - `run_policy_decision_eval.py`
+  - current result: 3/3 passing
+- Added `assess_return_eligibility` as a higher-level agent tool that retrieves the full return policy, calls the structured classifier, and returns a decision for final response generation.
+- Updated `chat.py` and `run_eval.py` to filter nested model stream events so structured-output JSON from internal tool calls is not sent as customer-facing text.
+- Latest full local eval suite after wiring structured eligibility: 8/8 passing.
+- Latest inspected LangSmith experiment after syncing the updated dataset and filtering nested model streams: 8/8 passing.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth
@@ -1027,7 +1036,7 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Next Stage 4 work:
   - compare prompt/model versions over time in LangSmith
   - add LLM-as-judge only for semantic checks that deterministic evaluators cannot cover cleanly
-  - consider structured policy eligibility decisions to reduce return-policy variability
+  - use LangSmith experiment comparisons to track future prompt/model/tool changes
   - begin observability work beyond LangSmith, especially OpenTelemetry/logs/metrics/traces
 
 **Decisions locked:**

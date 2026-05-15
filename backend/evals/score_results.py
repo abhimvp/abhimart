@@ -50,12 +50,7 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def normalize(text: str) -> str:
-    return (
-        text.lower()
-        .replace("–", "-")
-        .replace("—", "-")
-        .replace("’", "'")
-    )
+    return text.lower().replace("–", "-").replace("—", "-").replace("’", "'")
 
 
 def get_tool_names(row: dict[str, Any]) -> list[str]:
@@ -72,6 +67,22 @@ def get_tool_names(row: dict[str, Any]) -> list[str]:
 def get_final_answer(row: dict[str, Any]) -> str:
     actual = row.get("actual") or {}
     return actual.get("final_answer") or ""
+
+
+def strip_leading_json(text: str) -> str:
+    """Remove raw leading JSON blobs from model output before prose checks."""
+    stripped = text.lstrip()
+
+    if not stripped.startswith("{"):
+        return text
+
+    decoder = json.JSONDecoder()
+    try:
+        _, end_index = decoder.raw_decode(stripped)
+    except json.JSONDecodeError:
+        return text
+
+    return stripped[end_index:].lstrip()
 
 
 def check_required_tools(row: dict[str, Any]) -> tuple[bool, str]:
@@ -109,7 +120,7 @@ def check_expected_sources(row: dict[str, Any]) -> tuple[bool, str]:
     if not expected.get("must_cite_sources"):
         return True, "No source citation required."
 
-    answer = get_final_answer(row)
+    answer = strip_leading_json(get_final_answer(row))
     answer_normalized = normalize(answer)
     expected_sources = expected.get("expected_sources", [])
 
@@ -132,7 +143,7 @@ def check_must_mention(row: dict[str, Any]) -> tuple[bool, str]:
     if not required_phrases:
         return True, "No required phrases."
 
-    answer = normalize(get_final_answer(row))
+    answer = normalize(strip_leading_json(get_final_answer(row)))
     missing = [phrase for phrase in required_phrases if normalize(phrase) not in answer]
 
     if missing:
@@ -148,7 +159,7 @@ def check_must_mention_any(row: dict[str, Any]) -> tuple[bool, str]:
     if not phrase_groups:
         return True, "No phrase groups required."
 
-    answer = normalize(get_final_answer(row))
+    answer = normalize(strip_leading_json(get_final_answer(row)))
     missing_groups = []
 
     for group in phrase_groups:
@@ -168,7 +179,7 @@ def check_must_ask_for(row: dict[str, Any]) -> tuple[bool, str]:
     if not required_questions:
         return True, "No required clarification."
 
-    answer = normalize(get_final_answer(row))
+    answer = normalize(strip_leading_json(get_final_answer(row)))
     missing = [
         phrase for phrase in required_questions if normalize(phrase) not in answer
     ]
@@ -186,7 +197,7 @@ def check_expected_stance(row: dict[str, Any]) -> tuple[bool, str]:
     if not stance:
         return True, "No stance expectation."
 
-    answer = normalize(get_final_answer(row)).strip()
+    answer = normalize(strip_leading_json(get_final_answer(row))).strip()
 
     if stance == "likely_not_returnable":
         contextual_restrictive_markers = [
@@ -214,14 +225,25 @@ def check_expected_stance(row: dict[str, Any]) -> tuple[bool, str]:
             "yes, you can return",
             "yes you can return",
             "you can return",
-            "eligible for return",
-            "eligible for a return",
             "should be eligible",
             "you should be eligible",
+            "may be eligible",
+            "might be eligible",
+            "is eligible",
         ]
 
         restrictive_markers = [
             "probably not",
+            "likely would not be eligible",
+            "likely not be eligible",
+            "likely would not be accepted",
+            "would not be eligible",
+            "not be eligible",
+            "not eligible for a return",
+            "do not meet the criteria",
+            "does not meet the criteria",
+            "do not meet the eligibility",
+            "does not meet the eligibility",
             "may not be eligible",
             "not eligible",
             "cannot return",
@@ -240,14 +262,14 @@ def check_expected_stance(row: dict[str, Any]) -> tuple[bool, str]:
         if has_contextual_restriction:
             return True, "Answer tied the used-item condition to return risk."
 
+        if has_restrictive and not has_permissive:
+            return True, "Answer matched likely-not-returnable stance."
+
         if has_permissive:
             return (
                 False,
                 "Expected likely-not-returnable stance, but answer was permissive.",
             )
-
-        if has_restrictive:
-            return True, "Answer matched likely-not-returnable stance."
 
         return False, "Expected likely-not-returnable stance, but stance was unclear."
 

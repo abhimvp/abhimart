@@ -92,6 +92,12 @@ def extract_text_from_chunk(content: Any) -> str:
     return ""
 
 
+def is_top_level_agent_llm_event(event: dict[str, Any]) -> bool:
+    """Return True for customer-facing LLM streams from the graph's llm node."""
+    metadata = event.get("metadata") or {}
+    return metadata.get("langgraph_node") == "llm"
+
+
 async def run_one_example(graph: Any, example: dict[str, Any]) -> dict[str, Any]:
     """Run one dataset example through the real agent graph."""
     message = example["inputs"]["message"]
@@ -133,6 +139,9 @@ async def run_one_example(graph: Any, example: dict[str, Any]) -> dict[str, Any]
             )
 
         if event_name == "on_chat_model_stream":
+            if not is_top_level_agent_llm_event(event):
+                continue
+
             chunk = event_data.get("chunk")
             if chunk is None:
                 continue

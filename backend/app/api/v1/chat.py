@@ -45,6 +45,10 @@ async def event_stream(graph, message: str, session_id: str):
 
     async for event in graph.astream_events(inputs, config=config, version="v2"):
         if event["event"] == "on_chat_model_stream":
+            metadata = event.get("metadata") or {}
+            if metadata.get("langgraph_node") != "llm":
+                continue
+
             chunk = event["data"]["chunk"]
             content = chunk.content
 
