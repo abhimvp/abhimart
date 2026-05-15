@@ -9,7 +9,7 @@ and production deployment.
 ## Project docs
 
 See [Evaluation](docs/evaluation.md) for the current agent eval harness, golden
-dataset, and LangSmith experiment workflow.
+dataset, LangSmith experiment workflow, and Stage 4 evaluation learning guide.
 
 ## Status
 

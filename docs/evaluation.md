@@ -150,3 +150,72 @@ This is a policy-reasoning/synthesis issue, not a retrieval failure.
 - Add LLM-as-judge only for semantic checks that deterministic rules cannot
   capture cleanly.
 - Add OpenTelemetry-based system observability for traces, logs, and metrics.
+
+## Learning Checklist
+
+Evaluation is not just a library feature. It is an engineering habit: identify
+what can go wrong, turn those risks into examples, run the real system, score
+the behavior, and use failures to guide changes.
+
+Before adding or changing agent behavior, ask:
+
+1. What is the user trying to accomplish?
+2. What tool or data source should the agent use?
+3. What tool should the agent avoid?
+4. What facts must be grounded in retrieved or database-backed data?
+5. What should the agent ask for before acting?
+6. What should the agent refuse?
+7. What business decision must be correct?
+8. Can this be checked with deterministic code?
+9. Does this require human review or LLM-as-judge?
+10. What failure would be dangerous in production?
+
+For AbhiMart, those questions become eval categories:
+
+- Policy/RAG: answers must use `search_faq`, cite source docs, and apply all
+  policy conditions.
+- Order lookup: the agent must ask for email before lookup and use
+  `lookup_order` when the customer provides the email.
+- Product lookup: the agent must use `get_product_info` and avoid inventing
+  unavailable products.
+- Security/privacy: the agent must not expose another customer's orders.
+
+Useful vocabulary:
+
+| Observation | Engineering phrase |
+|---|---|
+| Agent called the wrong tool | Tool-routing failure |
+| Agent skipped a required tool | Missing tool invocation |
+| RAG returned the wrong document | Retrieval failure |
+| RAG returned the right document but answer was wrong | Synthesis/reasoning failure |
+| Answer lacks source document | Citation/grounding failure |
+| Answer invents unsupported facts | Hallucination |
+| Answer allows something too easily | Overly permissive / policy-compliance failure |
+| Answer refuses a valid request | Overly restrictive / false refusal |
+| Eval fails on harmless wording differences | Evaluator brittleness |
+| Same case passes and fails across runs | Model variability / flaky eval case |
+| Agent exposes another user's data | Privacy/authorization failure |
+
+Primary docs to read:
+
+- [LangSmith evaluation concepts](https://docs.langchain.com/langsmith/evaluation-concepts)
+- [LangSmith evaluation types](https://docs.langchain.com/langsmith/evaluation-types)
+- [LangSmith LLM-as-judge](https://docs.langchain.com/langsmith/llm-as-judge)
+- [OpenAI graders](https://platform.openai.com/docs/guides/graders/)
+
+Map those docs back to this project:
+
+| Docs concept | AbhiMart implementation |
+|---|---|
+| Dataset | `abhimart-stage4-golden` / `stage4_golden.jsonl` |
+| Example | One JSONL row |
+| Target function | `run_agent` in `langsmith_run.py` |
+| Evaluator | `deterministic_behavior_evaluator` / `score_results.py` |
+| Experiment | `abhimart-stage4-local-agent-*` |
+| Trace | One LangGraph agent run with model/tool calls |
+
+If these concepts are skipped, agent work becomes guesswork: prompt changes may
+feel better but regress hidden workflows, failures are hard to reproduce, and
+there is no clear way to compare one version of the agent to another. Reading
+the docs and mapping them to this project is what turns the eval harness from
+"scripts that pass" into an engineering system you can explain and extend.
