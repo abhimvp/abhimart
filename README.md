@@ -17,7 +17,7 @@ tech stack, stage-by-stage roadmap, and learning journey.
 | Stage 1 | LangGraph agent + streaming SSE chat API | ✅ Complete |
 | Stage 2 | Tools (order lookup, product info) + Postgres-backed memory | ✅ Complete |
 | Stage 3 | RAG pipeline — pgvector + Gemini embeddings + `search_faq` tool | ✅ Complete |
-| Stage 4 | Evals + observability (LangSmith) | 🔜 Next |
+| Stage 4 | Local eval harness complete; LangSmith experiments + observability next | 🚧 In Progress |
 | Stage 5 | Guardrails + multi-agent | 🔜 Planned |
 | Stage 6 | React frontend + production deployment | 🔜 Planned |
 
@@ -59,6 +59,11 @@ abhimart/
 │   │       └── chat.html               # Simple chat UI for testing
 │   ├── alembic/                        # Database migrations
 │   ├── pyproject.toml
+│   ├── evals/
+│   │   ├── datasets/
+│   │   │   └── stage4_golden.jsonl   # Golden eval cases
+│   │   ├── run_eval.py               # Runs real LangGraph agent on eval cases
+│   │   └── score_results.py          # Deterministic scoring + category summary
 │   └── .env.example
 ├── infra/
 │   └── docker-compose.yml              # pgvector/pgvector:pg17

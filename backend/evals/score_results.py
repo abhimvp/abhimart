@@ -16,6 +16,7 @@ Or:
 """
 
 import argparse
+from collections import defaultdict
 import json
 from pathlib import Path
 from typing import Any
@@ -259,6 +260,7 @@ def score_row(row: dict[str, Any]) -> dict[str, Any]:
     if row.get("error"):
         return {
             "id": row["id"],
+            "category": row.get("expected", {}).get("category", "unknown"),
             "passed": False,
             "checks": [
                 {
@@ -283,9 +285,23 @@ def score_row(row: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "id": row["id"],
+        "category": row.get("expected", {}).get("category", "unknown"),
         "passed": all(check["passed"] for check in checks),
         "checks": checks,
     }
+
+
+def summarize_by_category(scores: list[dict[str, Any]]) -> dict[str, dict[str, int]]:
+    summary = defaultdict(lambda: {"passed": 0, "total": 0})
+
+    for score in scores:
+        category = score["category"]
+        summary[category]["total"] += 1
+
+        if score["passed"]:
+            summary[category]["passed"] += 1
+
+    return dict(summary)
 
 
 def main() -> None:
@@ -303,9 +319,16 @@ def main() -> None:
 
     passed_count = sum(1 for score in scores if score["passed"])
     total_count = len(scores)
+    category_summary = summarize_by_category(scores)
 
     print(f"Scored {total_count} eval result(s) from {args.input}")
     print(f"Passed: {passed_count}/{total_count}")
+    print()
+    print("By category:")
+    for category in sorted(category_summary):
+        category_passed = category_summary[category]["passed"]
+        category_total = category_summary[category]["total"]
+        print(f"  {category}: {category_passed}/{category_total}")
     print()
 
     for score in scores:

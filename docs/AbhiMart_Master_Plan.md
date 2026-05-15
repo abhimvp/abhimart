@@ -982,9 +982,49 @@ These appear in the source materials but won't be built. Abhi should know they e
 
 ## Section 16 — Current state (update as we go)
 
-**Current stage:** Pre-Stage 0 — planning complete, ready to begin Stage 0
+**Current stage:** Stage 4 — Evaluation + observability, local eval harness complete; LangSmith experiments next
 
-**Stage 0 status:** Not started
+**Stage 0 status:** Complete
+
+**Stage 1 status:** Complete
+
+**Stage 2 status:** Complete
+
+**Stage 3 status:** Complete
+
+**Stage 4 status:** In progress
+
+**Latest progress update — May 15, 2026:**
+
+- Built the first local Stage 4 eval harness under `backend/evals/`.
+- Added `datasets/stage4_golden.jsonl` with 8 golden customer-support examples covering:
+  - policy/RAG behavior
+  - order lookup behavior
+  - product lookup behavior
+  - cross-customer privacy/safety behavior
+- Added `run_eval.py` to run the real LangGraph agent against the golden dataset, isolate memory per example with `InMemorySaver`, capture tool calls/final answers from LangGraph event streams, and save JSONL results.
+- Added `score_results.py` with deterministic evaluators for:
+  - required tool usage
+  - forbidden tool usage
+  - source citation checks
+  - required phrase checks
+  - flexible phrase-group checks via `must_mention_any`
+  - required clarification checks
+  - policy stance checks
+  - category-level pass-rate reporting
+- Current local baseline: all 8 golden cases pass behaviorally after evaluator calibration.
+- Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
+  - use `search_faq`
+  - treat retrieved policy text as source of truth
+  - apply all eligibility conditions
+  - explicitly handle opened/used/installed/assembled/damaged/missing-packaging conditions
+  - cite exact source filenames such as `[Source: return-policy.md]`
+- Important learning: the first return-policy failure was not retrieval. The agent retrieved/cited the right policy but synthesized it too permissively. This was diagnosed as a policy-reasoning/synthesis failure and fixed through targeted prompt changes plus better evaluator checks.
+- Next Stage 4 work:
+  - connect the local eval dataset/run function to LangSmith datasets and experiments
+  - compare prompt/model versions over time in LangSmith
+  - add LLM-as-judge only for semantic checks that deterministic evaluators cannot cover cleanly
+  - begin observability work beyond LangSmith, especially OpenTelemetry/logs/metrics/traces
 
 **Decisions locked:**
 
@@ -1008,7 +1048,7 @@ These appear in the source materials but won't be built. Abhi should know they e
 2. Stage 1: LangGraph 1.x, `create_agent`, SSE streaming, async streaming patterns
 3. Stage 2: tool schemas hands-on, Postgres checkpointer, multi-tenancy basics
 4. Stage 3: RAG hands-on (Abhi has theory, needs implementation), pgvector, hybrid search
-5. Stage 4: OpenTelemetry from scratch, LangSmith evals
+5. Stage 4: LangSmith evals and OpenTelemetry from scratch
 6. Stage 5: middleware (new v1 concept), HITL primitives
 7. Stage 6: multi-agent patterns hands-on, full React 19 + TypeScript
 8. Stage 7: Celery, cost engineering, model routing
@@ -1016,11 +1056,11 @@ These appear in the source materials but won't be built. Abhi should know they e
 
 **Stage completion log:**
 
-- [ ] Stage 0 — Foundations
-- [ ] Stage 1 — First chatting agent
-- [ ] Stage 2 — Tools + memory + durable execution
-- [ ] Stage 3 — RAG
-- [ ] Stage 4 — Evaluation + observability
+- [x] Stage 0 — Foundations
+- [x] Stage 1 — First chatting agent
+- [x] Stage 2 — Tools + memory + durable execution
+- [x] Stage 3 — RAG
+- [ ] Stage 4 — Evaluation + observability (in progress: local deterministic eval harness complete; LangSmith experiments next)
 - [ ] Stage 5 — Write actions + HITL + guardrails
 - [ ] Stage 6 — Multi-agent + frontend
 - [ ] Stage 7 — Queues + scheduled jobs + cost engineering
