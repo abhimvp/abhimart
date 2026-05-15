@@ -50,7 +50,12 @@ def load_jsonl(path: Path) -> list[dict[str, Any]]:
 
 
 def normalize(text: str) -> str:
-    return text.lower()
+    return (
+        text.lower()
+        .replace("–", "-")
+        .replace("—", "-")
+        .replace("’", "'")
+    )
 
 
 def get_tool_names(row: dict[str, Any]) -> list[str]:
@@ -188,8 +193,12 @@ def check_expected_stance(row: dict[str, Any]) -> tuple[bool, str]:
             "because you mentioned the headphones have been opened and used",
             "because you mentioned that you have opened and used",
             "because you mentioned you have opened and used",
+            "because you mentioned that you have used",
+            "because you mentioned you have used",
             "because you mentioned that you used",
             "because you mentioned you used",
+            "since you mentioned that the headphones have been opened and used",
+            "since you mentioned the headphones have been opened and used",
             "since you mentioned that you have already used",
             "since you mentioned that you have used",
             "since you mentioned you have already used",

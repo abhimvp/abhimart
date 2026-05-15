@@ -1013,6 +1013,10 @@ These appear in the source materials but won't be built. Abhi should know they e
   - policy stance checks
   - category-level pass-rate reporting
 - Current local baseline: all 8 golden cases pass behaviorally after evaluator calibration.
+- Synced the golden dataset to LangSmith as `abhimart-stage4-golden`.
+- Added `langsmith_run.py` to run the real LangGraph agent as a LangSmith experiment with deterministic evaluator scoring.
+- Latest inspected LangSmith experiments ran all 8 examples successfully; deterministic scores exposed expected model variability in the return-policy used-item case.
+- Added public-facing `docs/evaluation.md` documenting the eval harness, local commands, LangSmith workflow, current baseline, and known flaky policy-reasoning case.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth
@@ -1021,9 +1025,9 @@ These appear in the source materials but won't be built. Abhi should know they e
   - cite exact source filenames such as `[Source: return-policy.md]`
 - Important learning: the first return-policy failure was not retrieval. The agent retrieved/cited the right policy but synthesized it too permissively. This was diagnosed as a policy-reasoning/synthesis failure and fixed through targeted prompt changes plus better evaluator checks.
 - Next Stage 4 work:
-  - connect the local eval dataset/run function to LangSmith datasets and experiments
   - compare prompt/model versions over time in LangSmith
   - add LLM-as-judge only for semantic checks that deterministic evaluators cannot cover cleanly
+  - consider structured policy eligibility decisions to reduce return-policy variability
   - begin observability work beyond LangSmith, especially OpenTelemetry/logs/metrics/traces
 
 **Decisions locked:**
