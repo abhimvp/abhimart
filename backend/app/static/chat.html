@@ -5,21 +5,26 @@
     <title>AbhiMart Support Agent</title>
     <style>
       body {
-        font-family: sans-serif;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
         max-width: 800px;
         margin: 40px auto;
         padding: 0 20px;
+        color: #172033;
+        background: #f7f8fb;
       }
       #messages {
-        border: 1px solid #ddd;
+        border: 1px solid #d8deea;
         height: 400px;
         overflow-y: auto;
         padding: 16px;
         margin-bottom: 16px;
         border-radius: 8px;
+        background: white;
       }
       .user {
-        color: #1a56db;
+        color: #1346a3;
         margin: 8px 0;
       }
       .agent {
@@ -39,7 +44,7 @@
       }
       button {
         padding: 8px 20px;
-        background: #1a56db;
+        background: #1346a3;
         color: white;
         border: none;
         border-radius: 6px;
@@ -48,6 +53,39 @@
       }
       button:disabled {
         background: #aaa;
+      }
+      .approval-card {
+        border: 1px solid #c9d3e7;
+        background: #f8fbff;
+        border-radius: 8px;
+        padding: 14px;
+        margin: 10px 0;
+      }
+      .approval-card h3 {
+        margin: 0 0 10px;
+        font-size: 16px;
+      }
+      .approval-grid {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        gap: 6px 12px;
+        margin-bottom: 12px;
+        font-size: 14px;
+      }
+      .approval-label {
+        color: #667085;
+      }
+      .approval-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .reject-btn {
+        background: #8a1f2d;
+      }
+      .status-text {
+        color: #667085;
+        font-size: 14px;
+        margin-top: 8px;
       }
     </style>
   </head>
@@ -60,6 +98,123 @@
     </div>
 
     <script>
+      const sessionId = `browser-${crypto.randomUUID()}`;
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function appendTextMessage(role, text) {
+        const messages = document.getElementById("messages");
+        const div = document.createElement("div");
+        div.className = role === "You" ? "user" : "agent";
+        div.innerHTML = `<strong>${role}:</strong> ${escapeHtml(text)}`;
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+        return div;
+      }
+
+      async function streamChatRequest(url, body, onPayload) {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const events = buffer.split("\n\n");
+          buffer = events.pop() || "";
+
+          for (const eventText of events) {
+            const dataLine = eventText
+              .split("\n")
+              .find((line) => line.startsWith("data: "));
+            if (!dataLine) continue;
+
+            const data = dataLine.slice(6);
+            if (data === "[DONE]") return;
+            onPayload(JSON.parse(data));
+          }
+        }
+      }
+
+      function renderApprovalCard(interrupt) {
+        const messages = document.getElementById("messages");
+        const card = document.createElement("div");
+        card.className = "approval-card";
+        card.innerHTML = `
+          <h3>Refund approval required</h3>
+          <div class="approval-grid">
+            <div class="approval-label">Customer</div>
+            <div>${escapeHtml(interrupt.customer_name)} (${escapeHtml(interrupt.customer_email)})</div>
+            <div class="approval-label">Order</div>
+            <div>#${escapeHtml(interrupt.order_id_preview)} - ${escapeHtml(interrupt.order_status)}</div>
+            <div class="approval-label">Amount</div>
+            <div>$${escapeHtml(interrupt.total_amount)}</div>
+            <div class="approval-label">Item</div>
+            <div>${escapeHtml((interrupt.items || []).map((item) => item.product_name).join(", "))}</div>
+          </div>
+          <div class="approval-actions">
+            <button type="button" class="approve-btn">Approve</button>
+            <button type="button" class="reject-btn">Reject</button>
+          </div>
+          <div class="status-text"></div>
+        `;
+
+        const approveBtn = card.querySelector(".approve-btn");
+        const rejectBtn = card.querySelector(".reject-btn");
+        const status = card.querySelector(".status-text");
+
+        approveBtn.addEventListener("click", () => resumeApproval(card, true));
+        rejectBtn.addEventListener("click", () => resumeApproval(card, false));
+
+        messages.appendChild(card);
+        messages.scrollTop = messages.scrollHeight;
+
+        async function resumeApproval(cardElement, approved) {
+          approveBtn.disabled = true;
+          rejectBtn.disabled = true;
+          status.textContent = approved
+            ? "Submitting approval..."
+            : "Submitting rejection...";
+
+          const agentDiv = appendTextMessage("Agent", "");
+          agentDiv.innerHTML = "<strong>Agent:</strong> ";
+
+          await streamChatRequest(
+            "http://localhost:8000/v1/chat/resume",
+            {
+              session_id: sessionId,
+              approved,
+              reviewer_note: approved
+                ? "Approved from browser demo"
+                : "Rejected from browser demo",
+            },
+            (payload) => {
+              if (payload.text) {
+                agentDiv.innerHTML += escapeHtml(payload.text);
+              }
+            },
+          );
+
+          status.textContent = approved ? "Approved" : "Rejected";
+          cardElement.querySelector(".approval-actions").remove();
+        }
+      }
+
       async function sendMessage() {
         const input = document.getElementById("message-input");
         const messages = document.getElementById("messages");
@@ -68,8 +223,7 @@
         const message = input.value.trim();
         if (!message) return;
 
-        // Show user message
-        messages.innerHTML += `<div class="user"><strong>You:</strong> ${message}</div>`;
+        appendTextMessage("You", message);
         input.value = "";
         btn.disabled = true;
 
@@ -79,36 +233,22 @@
         agentDiv.innerHTML = "<strong>Agent:</strong> ";
         messages.appendChild(agentDiv);
 
-        // Call the SSE endpoint
-        const response = await fetch("http://localhost:8000/v1/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
-        });
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        // Read chunks as they arrive
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6);
-              if (data === "[DONE]") break;
-              try {
-                const parsed = JSON.parse(data);
-                agentDiv.innerHTML += parsed.text;
-                messages.scrollTop = messages.scrollHeight;
-              } catch {}
+        await streamChatRequest(
+          "http://localhost:8000/v1/chat",
+          { message, session_id: sessionId },
+          (payload) => {
+            if (payload.type === "interrupt") {
+              agentDiv.remove();
+              renderApprovalCard(payload.interrupt[0] || payload.interrupt);
+              return;
             }
-          }
-        }
+
+            if (payload.text) {
+              agentDiv.innerHTML += escapeHtml(payload.text);
+              messages.scrollTop = messages.scrollHeight;
+            }
+          },
+        );
 
         btn.disabled = false;
         input.focus();

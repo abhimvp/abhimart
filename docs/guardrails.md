@@ -347,6 +347,7 @@ backend/app/models/refund_request.py
 backend/alembic/versions/9495bdfe78c0_create_refund_requests_table.py
 backend/app/agents/customer_support/graph.py
 backend/app/api/v1/chat.py
+backend/app/static/chat.html
 backend/evals/refund_hitl_probe.py
 backend/evals/chat_api_hitl_probe.py
 ```
@@ -472,6 +473,16 @@ data: {
 The frontend should treat this as an approval UI event, not as normal assistant
 text. It should show the review payload, then call `/v1/chat/resume` with the
 same `session_id`.
+
+The temporary static UI at `/static/chat.html` already follows this contract:
+
+- normal `{ "text": "..." }` payloads append to the chat transcript
+- `{ "type": "interrupt", ... }` payloads render a refund approval card
+- Approve/Reject buttons call `/v1/chat/resume` with the same browser session ID
+
+When this moves to React, the same logic should become a custom hook such as
+`useChatStream`. We do not need LangGraph's `useStream` hook for the current
+architecture because the browser talks to our own FastAPI SSE endpoint.
 
 Resume the paused run:
 

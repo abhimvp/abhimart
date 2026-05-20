@@ -1078,6 +1078,8 @@ These appear in the source materials but won't be built. Abhi should know they e
   - verifies the SSE interrupt event shape
   - resumes the same session through `POST /v1/chat/resume`
   - confirms the final processed/rejected response comes through the HTTP layer
+- Updated the temporary static chat UI to render refund approval cards from SSE
+  interrupt events and call `/v1/chat/resume` from Approve/Reject buttons.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth

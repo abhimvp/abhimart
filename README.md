@@ -141,3 +141,18 @@ uv run python evals/chat_api_hitl_probe.py
 
 The probe sends a refund request to `/v1/chat`, verifies the SSE interrupt event,
 then resumes the same session through `/v1/chat/resume`.
+
+You can also try the browser demo at:
+
+```text
+http://127.0.0.1:8000/static/chat.html
+```
+
+Ask:
+
+```text
+My email is rohit@example.com. Please start a refund for my MacBook order.
+```
+
+The page should show a refund approval card. Approve or reject it to resume the
+paused graph run.
