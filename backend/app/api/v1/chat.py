@@ -34,6 +34,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.observability import get_tracer
+from app.observability_metrics import (
+    record_chat_request,
+    record_chat_stream,
+    record_error,
+)
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 tracer = get_tracer(__name__)
@@ -85,18 +90,23 @@ async def event_stream(graph, message: str, session_id: str):
                         chunk_count += 1
                         yield f"data: {json.dumps({'text': text})}\n\n"
         except Exception:
+            duration_ms = round((perf_counter() - start) * 1000, 2)
+            record_chat_stream(duration_ms, status="error")
+            record_error(area="chat_stream")
             logger.exception(
                 "chat_stream_failed",
                 session_id=session_id,
-                duration_ms=round((perf_counter() - start) * 1000, 2),
+                duration_ms=duration_ms,
                 chunk_count=chunk_count,
             )
             raise
 
+        duration_ms = round((perf_counter() - start) * 1000, 2)
+        record_chat_stream(duration_ms, status="success")
         logger.info(
             "chat_stream_completed",
             session_id=session_id,
-            duration_ms=round((perf_counter() - start) * 1000, 2),
+            duration_ms=duration_ms,
             chunk_count=chunk_count,
         )
 
@@ -114,6 +124,7 @@ async def chat(request: ChatRequest, req: Request):
             session_id=request.session_id,
             message_length=len(request.message),
         )
+        record_chat_request()
         return StreamingResponse(
             event_stream(graph, request.message, request.session_id),
             media_type="text/event-stream",

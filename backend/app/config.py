@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     OTEL_EXPORTER: str = "console"
     OTEL_OTLP_ENDPOINT: str = "http://localhost:4317"
     OTEL_OTLP_INSECURE: bool = True
+    OTEL_METRICS_ENABLED: bool = False
+    OTEL_METRICS_EXPORTER: str = "prometheus"
 
 
 @lru_cache

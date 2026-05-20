@@ -6,9 +6,10 @@ set OTEL_EXPORTER=otlp and send traces to Jaeger on localhost:4317.
 
 import structlog
 from fastapi import FastAPI
-from opentelemetry import trace
+from opentelemetry import metrics, trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
@@ -63,6 +64,24 @@ def setup_observability(app: FastAPI, settings: Settings) -> None:
     provider.add_span_processor(BatchSpanProcessor(_build_span_exporter(settings)))
     trace.set_tracer_provider(provider)
 
+    if settings.OTEL_METRICS_ENABLED:
+        if settings.OTEL_METRICS_EXPORTER.lower() != "prometheus":
+            raise ValueError(
+                "Unsupported OTEL_METRICS_EXPORTER. Expected 'prometheus', "
+                f"got {settings.OTEL_METRICS_EXPORTER!r}."
+            )
+
+        from opentelemetry.exporter.prometheus import PrometheusMetricReader
+        from prometheus_client import make_asgi_app
+
+        metric_reader = PrometheusMetricReader()
+        meter_provider = MeterProvider(
+            resource=resource,
+            metric_readers=[metric_reader],
+        )
+        metrics.set_meter_provider(meter_provider)
+        app.mount("/metrics", make_asgi_app())
+
     FastAPIInstrumentor.instrument_app(
         app,
         tracer_provider=provider,
@@ -77,9 +96,16 @@ def setup_observability(app: FastAPI, settings: Settings) -> None:
         service_name=settings.OTEL_SERVICE_NAME,
         environment=settings.OTEL_ENVIRONMENT,
         exporter=settings.OTEL_EXPORTER,
+        metrics_enabled=settings.OTEL_METRICS_ENABLED,
+        metrics_exporter=settings.OTEL_METRICS_EXPORTER,
     )
 
 
 def get_tracer(name: str):
     """Return a tracer with a stable project namespace."""
     return trace.get_tracer(name)
+
+
+def get_meter(name: str):
+    """Return a meter with a stable project namespace."""
+    return metrics.get_meter(name)

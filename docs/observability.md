@@ -413,6 +413,26 @@ Recommended first metrics:
 - error count
 - policy decision counter by decision label
 
+Implemented first metrics:
+
+```text
+abhimart_chat_requests_total
+abhimart_chat_stream_duration_ms
+abhimart_tool_calls_total
+abhimart_tool_duration_ms
+abhimart_rag_retrievals_total
+abhimart_rag_retrieval_duration_ms
+abhimart_errors_total
+abhimart_policy_decisions_total
+```
+
+They are exposed through a Prometheus-compatible `/metrics` endpoint when:
+
+```env
+OTEL_METRICS_ENABLED=true
+OTEL_METRICS_EXPORTER=prometheus
+```
+
 Possible names:
 
 ```text
@@ -590,6 +610,61 @@ POST /v1/chat
 
 Jaeger is local and uses transient in-memory storage here. If the container is
 restarted, old traces disappear. That is fine for local development.
+
+## Local Metrics Endpoint
+
+Install the Prometheus exporter dependency from the backend directory:
+
+```bash
+cd backend
+uv add opentelemetry-exporter-prometheus prometheus-client
+```
+
+Enable metrics in `.env`:
+
+```env
+OTEL_METRICS_ENABLED=true
+OTEL_METRICS_EXPORTER=prometheus
+```
+
+Start the backend:
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+Send a chat request:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"What warranty do laptops come with?","session_id":"metrics-test-1"}'
+```
+
+Open metrics:
+
+```text
+http://127.0.0.1:8000/metrics
+```
+
+Search for:
+
+```text
+abhimart_
+```
+
+Expected examples:
+
+```text
+abhimart_chat_requests_total
+abhimart_tool_calls_total
+abhimart_rag_retrievals_total
+abhimart_chat_stream_duration_ms
+```
+
+This is not a full Prometheus/Grafana setup yet. It proves the app emits
+Prometheus-compatible metrics. A future step can add Prometheus and Grafana
+containers to scrape and visualize this endpoint over time.
 
 ## Questions To Ask Before Adding Observability
 

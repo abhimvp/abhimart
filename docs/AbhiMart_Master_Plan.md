@@ -1044,6 +1044,9 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Expanded `docs/observability.md` with metrics concepts: counters,
   histograms, gauges, Prometheus, Grafana, cardinality, and the first metrics
   AbhiMart should add if we implement metrics in this stage.
+- Added first Prometheus-compatible app metrics behind `/metrics`:
+  chat request count, chat stream duration, tool calls/duration, RAG retrieval
+  count/duration, error count, and policy decision count.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth

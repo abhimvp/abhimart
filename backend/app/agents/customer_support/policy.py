@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from app.config import get_settings
 from app.observability import get_tracer
+from app.observability_metrics import record_policy_decision
 
 tracer = get_tracer(__name__)
 logger = structlog.get_logger()
@@ -104,6 +105,7 @@ async def classify_return_eligibility(
         )
         span.set_attribute("abhimart.policy_decision", response.decision)
         span.set_attribute("abhimart.policy_confidence", response.confidence)
+        record_policy_decision(response.decision)
         logger.info(
             "policy_classification_completed",
             policy_source=source,
