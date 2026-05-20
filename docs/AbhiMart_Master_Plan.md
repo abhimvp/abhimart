@@ -1073,6 +1073,11 @@ These appear in the source materials but won't be built. Abhi should know they e
   - no external payment provider is called
   - the workflow now exercises `pending_review -> approved -> processed` and
     `pending_review -> rejected`
+- Added API-level HITL probe in `evals/chat_api_hitl_probe.py`:
+  - calls `POST /v1/chat`
+  - verifies the SSE interrupt event shape
+  - resumes the same session through `POST /v1/chat/resume`
+  - confirms the final processed/rejected response comes through the HTTP layer
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth

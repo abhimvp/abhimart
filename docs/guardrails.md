@@ -344,10 +344,11 @@ Files:
 ```text
 backend/app/agents/customer_support/refund.py
 backend/app/models/refund_request.py
-backend/alembic/versions/e38d7b0db2bb_create_refund_requests_table.py
+backend/alembic/versions/9495bdfe78c0_create_refund_requests_table.py
 backend/app/agents/customer_support/graph.py
 backend/app/api/v1/chat.py
 backend/evals/refund_hitl_probe.py
+backend/evals/chat_api_hitl_probe.py
 ```
 
 Flow:
@@ -453,6 +454,25 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat \
   -d '{"message":"My email is rohit@example.com. Please start a refund for my MacBook order.","session_id":"refund-demo-1"}'
 ```
 
+Expected interrupt SSE event shape:
+
+```text
+data: {
+  "type": "interrupt",
+  "interrupt": {
+    "kind": "refund_approval_required",
+    "action": "review_refund_request",
+    "refund_request_id": "...",
+    "order_id_preview": "83d1505b",
+    "refund_status": "pending_review"
+  }
+}
+```
+
+The frontend should treat this as an approval UI event, not as normal assistant
+text. It should show the review payload, then call `/v1/chat/resume` with the
+same `session_id`.
+
 Resume the paused run:
 
 ```bash
@@ -460,6 +480,16 @@ curl -N -X POST http://127.0.0.1:8000/v1/chat/resume \
   -H "Content-Type: application/json" \
   -d '{"session_id":"refund-demo-1","approved":true,"reviewer_note":"Approved for demo"}'
 ```
+
+API probe:
+
+```bash
+uv run python evals/chat_api_hitl_probe.py
+```
+
+The API probe requires the FastAPI server to already be running. It calls
+`/v1/chat`, verifies the interrupt SSE event, then calls `/v1/chat/resume` and
+checks the final response.
 
 What this protects:
 

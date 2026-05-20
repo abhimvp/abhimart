@@ -119,5 +119,25 @@ uv run uvicorn app.main:app --reload
 | GET | `/docs` | Swagger UI |
 | GET | `/v1/products` | List all products |
 | POST | `/v1/chat` | Streaming SSE chat |
+| POST | `/v1/chat/resume` | Resume a paused human-in-the-loop chat run |
 | GET | `/v1/chat/history/{session_id}` | Conversation history |
 | GET | `/static/chat.html` | Simple chat UI |
+
+## Refund Approval Demo
+
+Start the backend:
+
+```bash
+cd backend
+uv run uvicorn app.main:app --reload
+```
+
+In another terminal, run the HTTP probe:
+
+```bash
+cd backend
+uv run python evals/chat_api_hitl_probe.py
+```
+
+The probe sends a refund request to `/v1/chat`, verifies the SSE interrupt event,
+then resumes the same session through `/v1/chat/resume`.
