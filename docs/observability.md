@@ -240,13 +240,241 @@ Interview-ready distinction:
 > me understand what important events happened and what decisions/outcomes were
 > produced.
 
-Later, we can add metrics such as:
+## Metrics
+
+Metrics are numeric measurements collected over time.
+
+They answer different questions from logs and traces:
+
+```text
+Trace:   What happened inside this one request?
+Log:     What event happened, and with what outcome?
+Metric:  How often is this happening over time?
+```
+
+Examples:
+
+- requests per minute
+- error rate
+- average / p95 / p99 latency
+- number of RAG retrievals
+- number of tool calls by tool name
+- number of active requests
+- LLM request duration distribution
+
+Metrics are usually aggregated and visualized as graphs. They are also the main
+signal used for alerting.
+
+Example alert questions:
+
+- Is the chat API error rate above 5%?
+- Is p95 latency above 10 seconds?
+- Did RAG retrieval failures spike?
+- Did order lookup latency increase after a database change?
+
+### Metrics vs Logs vs Traces
+
+Use all three together:
+
+```text
+Metrics tell us something is wrong.
+Traces show where time/errors happened in one request.
+Logs explain important events and outcomes around that request.
+```
+
+Example incident:
+
+```text
+Metric:  p95 chat latency jumped from 4s to 15s.
+Trace:   Most slow requests spend time in agent.llm_node.
+Log:     Requests are still retrieving the right source documents.
+Action:  Investigate model latency/quota/provider behavior, not RAG.
+```
+
+### Common Metric Types
+
+OpenTelemetry exposes metric instruments. The most important ones for this
+project are:
+
+#### Counter
+
+A value that only goes up.
+
+Use for:
+
+- total chat requests
+- total tool calls
+- total errors
+- total RAG retrievals
+
+Example mental model:
+
+```text
+chat_requests_total += 1
+tool_calls_total{tool_name="search_faq"} += 1
+```
+
+#### Histogram
+
+Records a distribution of values.
+
+Use for:
+
+- chat request duration
+- agent run duration
+- RAG retrieval duration
+- tool execution duration
+- LLM call duration
+
+Histograms are how we later ask p95/p99 latency questions.
+
+Example mental model:
+
+```text
+chat_request_duration_ms observe 3520
+rag_retrieval_duration_ms observe 577
+```
+
+#### Gauge
+
+A value that can go up or down.
+
+Use for:
+
+- active requests
+- queue depth
+- current worker count
+
+We probably do not need many gauges yet.
+
+### Prometheus
+
+Prometheus is a common open-source metrics backend.
+
+It stores metrics as time series:
+
+```text
+metric name + labels + timestamped values
+```
+
+Example:
+
+```text
+chat_requests_total{route="/v1/chat",status="200"} 1234
+tool_calls_total{tool_name="search_faq"} 81
+```
+
+Prometheus commonly uses a pull model: it periodically scrapes an HTTP endpoint
+from the app, such as:
+
+```text
+/metrics
+```
+
+For AbhiMart, a future Prometheus flow could be:
+
+```text
+AbhiMart /metrics endpoint -> Prometheus -> Grafana dashboard
+```
+
+### Grafana
+
+Grafana is a visualization/dashboard tool.
+
+It does not usually collect metrics itself. It reads from data sources such as:
+
+- Prometheus for metrics
+- Jaeger or Tempo for traces
+- Loki or another log backend for logs
+
+For AbhiMart, Grafana would be useful for dashboards like:
+
+- chat request rate
+- chat latency p50/p95/p99
+- error rate
+- tool call counts by tool
+- RAG retrieval latency
+- policy classifier decision counts
+
+### What Metrics Should AbhiMart Add First?
+
+Do not add every possible metric. Start with a small set that answers real
+operational questions.
+
+Recommended first metrics:
 
 - request count
-- request latency
-- agent latency
-- tool call count
+- request duration histogram
+- chat stream duration histogram
+- tool call counter by tool name
+- tool duration histogram by tool name
+- RAG retrieval counter
+- RAG retrieval duration histogram
 - error count
+- policy decision counter by decision label
+
+Possible names:
+
+```text
+abhimart_chat_requests_total
+abhimart_chat_request_duration_ms
+abhimart_chat_stream_duration_ms
+abhimart_tool_calls_total
+abhimart_tool_duration_ms
+abhimart_rag_retrievals_total
+abhimart_rag_retrieval_duration_ms
+abhimart_errors_total
+abhimart_policy_decisions_total
+```
+
+### Metric Cardinality
+
+Cardinality means how many unique label combinations a metric can produce.
+
+This matters a lot in production. High-cardinality metrics can become expensive
+and slow.
+
+Good labels:
+
+```text
+route="/v1/chat"
+status_code="200"
+tool_name="search_faq"
+policy_decision="likely_not_eligible"
+environment="local"
+```
+
+Bad labels:
+
+```text
+session_id="abc123"
+email="rohit@example.com"
+message="Where is my order?"
+order_id="..."
+```
+
+Why bad? They create too many unique time series and may expose private data.
+
+Rule for AbhiMart:
+
+> Never put raw user input, full emails, session IDs, order IDs, or retrieved
+> text into metric labels.
+
+### Do We Need Metrics Now?
+
+Not urgently.
+
+We already have:
+
+- deterministic evals for behavior quality
+- LangSmith for agent/LLM debugging
+- Jaeger traces for request flow
+- structured logs for important events and outcomes
+
+Metrics are the next observability layer, but the first implementation should be
+small. For a portfolio project, it is enough to show that we understand what
+metrics we would add and why. If we implement them, we should add only a few
+high-value counters/histograms first.
 
 We do not need a paid observability platform to learn this. Local console output
 or a local tracing backend is enough for the first pass.
@@ -373,6 +601,9 @@ When adding observability to any project, ask:
 - What metadata would help us filter the problem later?
 - Are we collecting enough information to debug without exposing sensitive data?
 - Which data belongs in LangSmith, and which belongs in OpenTelemetry?
+- Which questions need traces, which need logs, and which need metrics?
+- Which metric labels could accidentally create high cardinality?
+- Which fields might expose customer data if logged or used as labels?
 
 For AbhiMart, sensitive values such as full customer emails, full chat content,
 or private order details should be handled carefully. Observability should help
@@ -385,3 +616,6 @@ debug the system without becoming a privacy leak.
 - [OpenTelemetry docs](https://opentelemetry.io/docs/)
 - [OpenTelemetry Python exporters](https://opentelemetry.io/docs/languages/python/exporters/)
 - [Jaeger getting started](https://www.jaegertracing.io/docs/latest/getting-started/)
+- [OpenTelemetry metrics API](https://opentelemetry.io/docs/specs/otel/metrics/api/)
+- [Prometheus overview](https://prometheus.io/docs/introduction/overview/)
+- [Grafana visualizations](https://grafana.com/docs/grafana/latest/visualizations/)
