@@ -226,7 +226,7 @@ async def prepare_refund_review(message: str) -> RefundReviewResult:
         return RefundReviewResult(
             should_interrupt=False,
             response=(
-                "A refund request for this order has already been reviewed. "
+                "A refund request for this order was already reviewed. "
                 f"Current status: {refund_request.status}."
             ),
         )

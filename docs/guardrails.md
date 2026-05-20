@@ -407,6 +407,19 @@ Local probe:
 uv run python evals/refund_hitl_probe.py --approve
 ```
 
+Focused eval:
+
+```bash
+uv run python evals/run_refund_hitl_eval.py
+```
+
+This eval checks:
+
+- approval records `approved`
+- rejection records `rejected`
+- duplicate logical requests reuse the same idempotency key
+- refund requests for an unmatched product ask for clearer order/product info
+
 Manual API test:
 
 ```bash
