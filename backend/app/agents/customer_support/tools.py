@@ -11,11 +11,20 @@ from app.models.product import Product
 from app.models.user import User
 from app.config import get_settings
 from app.agents.customer_support.policy import classify_return_eligibility
+from app.observability import get_tracer
 import asyncio
 import json
 
 _settings = get_settings()
 _DOCS_DIR = Path(__file__).resolve().parents[2] / "rag" / "docs"
+tracer = get_tracer(__name__)
+
+
+def _email_domain(email: str) -> str:
+    """Return only the email domain so traces avoid storing customer PII."""
+    if "@" not in email:
+        return "unknown"
+    return email.rsplit("@", 1)[1].lower()
 
 
 @tool
@@ -28,35 +37,42 @@ async def lookup_order(email: str) -> str:
     Args:
         email: The customer's email address
     """
-    async with async_session_factory() as session:
-        result = await session.execute(select(User).where(User.email == email))
-        user = result.scalar_one_or_none()
+    with tracer.start_as_current_span("tool.lookup_order") as span:
+        span.set_attribute("abhimart.tool", "lookup_order")
+        span.set_attribute("abhimart.email_domain", _email_domain(email))
 
-        if not user:
-            return f"No customer found with email '{email}'."
+        async with async_session_factory() as session:
+            result = await session.execute(select(User).where(User.email == email))
+            user = result.scalar_one_or_none()
 
-        result = await session.execute(
-            select(Order)
-            .where(Order.user_id == user.id)
-            .order_by(Order.created_at.desc())
-        )
-        orders = result.scalars().all()
+            if not user:
+                span.set_attribute("abhimart.customer_found", False)
+                return f"No customer found with email '{email}'."
 
-        if not orders:
-            return f"No orders found for {user.name} ({email})."
-
-        lines = [f"Orders for {user.name} ({email}):"]
-        for order in orders:
-            items_str = ", ".join(
-                f"{i['product_name']} x{i['qty']}" for i in order.items
+            span.set_attribute("abhimart.customer_found", True)
+            result = await session.execute(
+                select(Order)
+                .where(Order.user_id == user.id)
+                .order_by(Order.created_at.desc())
             )
-            lines.append(
-                f"  - Order #{str(order.id)[:8]} | "
-                f"Status: {order.status.upper()} | "
-                f"Total: ${order.total_amount} | "
-                f"Items: {items_str}"
-            )
-        return "\n".join(lines)
+            orders = result.scalars().all()
+            span.set_attribute("abhimart.order_count", len(orders))
+
+            if not orders:
+                return f"No orders found for {user.name} ({email})."
+
+            lines = [f"Orders for {user.name} ({email}):"]
+            for order in orders:
+                items_str = ", ".join(
+                    f"{i['product_name']} x{i['qty']}" for i in order.items
+                )
+                lines.append(
+                    f"  - Order #{str(order.id)[:8]} | "
+                    f"Status: {order.status.upper()} | "
+                    f"Total: ${order.total_amount} | "
+                    f"Items: {items_str}"
+                )
+            return "\n".join(lines)
 
 
 @tool
@@ -69,35 +85,40 @@ async def get_product_info(product_name: str) -> str:
     Args:
         product_name: The product name or partial name to search for
     """
-    async with async_session_factory() as session:
-        result = await session.execute(
-            select(Product)
-            .where(
-                Product.name.ilike(f"%{product_name}%"),
-                Product.is_active == True,
-            )
-            .limit(3)
-        )
-        products = result.scalars().all()
+    with tracer.start_as_current_span("tool.get_product_info") as span:
+        span.set_attribute("abhimart.tool", "get_product_info")
+        span.set_attribute("abhimart.product_query_length", len(product_name))
 
-        if not products:
-            return f"No products found matching '{product_name}'."
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Product)
+                .where(
+                    Product.name.ilike(f"%{product_name}%"),
+                    Product.is_active == True,
+                )
+                .limit(3)
+            )
+            products = result.scalars().all()
+            span.set_attribute("abhimart.product_result_count", len(products))
 
-        lines = []
-        for p in products:
-            stock = (
-                f"In Stock ({p.stock_quantity} units)"
-                if p.stock_quantity > 0
-                else "Out of Stock"
-            )
-            lines.append(
-                f"{p.name}\n"
-                f"  Price: ${p.price}\n"
-                f"  Category: {p.category}\n"
-                f"  Availability: {stock}\n"
-                f"  Description: {p.description[:150]}..."
-            )
-        return "\n\n".join(lines)
+            if not products:
+                return f"No products found matching '{product_name}'."
+
+            lines = []
+            for p in products:
+                stock = (
+                    f"In Stock ({p.stock_quantity} units)"
+                    if p.stock_quantity > 0
+                    else "Out of Stock"
+                )
+                lines.append(
+                    f"{p.name}\n"
+                    f"  Price: ${p.price}\n"
+                    f"  Category: {p.category}\n"
+                    f"  Availability: {stock}\n"
+                    f"  Description: {p.description[:150]}..."
+                )
+            return "\n\n".join(lines)
 
 
 # --- RAG setup ---
@@ -123,7 +144,14 @@ _vector_store = PGVector(
 
 async def _retrieve_knowledge_docs(query: str, *, k: int = 3):
     """Retrieve knowledge-base chunks from pgvector."""
-    return await asyncio.to_thread(_vector_store.similarity_search, query, k)
+    with tracer.start_as_current_span("rag.retrieve") as span:
+        span.set_attribute("abhimart.query_length", len(query))
+        span.set_attribute("abhimart.retrieval_k", k)
+        docs = await asyncio.to_thread(_vector_store.similarity_search, query, k)
+        span.set_attribute("abhimart.retrieved_doc_count", len(docs))
+        sources = sorted({doc.metadata.get("source", "unknown") for doc in docs})
+        span.set_attribute("abhimart.retrieved_sources", ",".join(sources))
+        return docs
 
 
 @tool
@@ -178,39 +206,48 @@ async def assess_return_eligibility(customer_question: str) -> str:
     Args:
         customer_question: The customer's return/refund eligibility question.
     """
-    docs = await _retrieve_knowledge_docs(
-        f"return policy eligibility {customer_question}",
-        k=3,
-    )
+    with tracer.start_as_current_span("tool.assess_return_eligibility") as span:
+        span.set_attribute("abhimart.tool", "assess_return_eligibility")
+        span.set_attribute("abhimart.question_length", len(customer_question))
 
-    return_policy_docs = [
-        doc for doc in docs if doc.metadata.get("source") == "return-policy.md"
-    ]
-    policy_docs = return_policy_docs or docs
-
-    if not policy_docs:
-        return json.dumps(
-            {
-                "decision": "need_more_info",
-                "reason": "No relevant return policy text was found.",
-                "source": "unknown",
-                "confidence": "low",
-            }
+        docs = await _retrieve_knowledge_docs(
+            f"return policy eligibility {customer_question}",
+            k=3,
         )
 
-    source = "return-policy.md"
-    full_return_policy_path = _DOCS_DIR / source
+        return_policy_docs = [
+            doc for doc in docs if doc.metadata.get("source") == "return-policy.md"
+        ]
+        policy_docs = return_policy_docs or docs
 
-    if full_return_policy_path.exists():
-        policy_text = full_return_policy_path.read_text(encoding="utf-8")
-    else:
-        source = policy_docs[0].metadata.get("source", "unknown")
-        policy_text = "\n\n".join(doc.page_content for doc in policy_docs)
+        if not policy_docs:
+            span.set_attribute("abhimart.policy_found", False)
+            return json.dumps(
+                {
+                    "decision": "need_more_info",
+                    "reason": "No relevant return policy text was found.",
+                    "source": "unknown",
+                    "confidence": "low",
+                }
+            )
 
-    decision = await classify_return_eligibility(
-        customer_question=customer_question,
-        policy_text=policy_text,
-        source=source,
-    )
+        span.set_attribute("abhimart.policy_found", True)
+        source = "return-policy.md"
+        full_return_policy_path = _DOCS_DIR / source
 
-    return json.dumps(decision.model_dump(), ensure_ascii=False)
+        if full_return_policy_path.exists():
+            policy_text = full_return_policy_path.read_text(encoding="utf-8")
+        else:
+            source = policy_docs[0].metadata.get("source", "unknown")
+            policy_text = "\n\n".join(doc.page_content for doc in policy_docs)
+
+        span.set_attribute("abhimart.policy_source", source)
+        decision = await classify_return_eligibility(
+            customer_question=customer_question,
+            policy_text=policy_text,
+            source=source,
+        )
+        span.set_attribute("abhimart.policy_decision", decision.decision)
+        span.set_attribute("abhimart.policy_confidence", decision.confidence)
+
+        return json.dumps(decision.model_dump(), ensure_ascii=False)

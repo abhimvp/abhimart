@@ -11,6 +11,10 @@ and production deployment.
 See [Evaluation](docs/evaluation.md) for the current agent eval harness, golden
 dataset, LangSmith experiment workflow, and Stage 4 evaluation learning guide.
 
+See [Observability Notes](docs/observability.md) for the project explanation of
+OpenTelemetry, traces/spans/metrics/logs, and how observability fits alongside
+LangSmith.
+
 ## Status
 
 | Stage | Description | Status |
@@ -59,7 +63,8 @@ abhimart/
 |   |-- pyproject.toml
 |   `-- .env.example
 |-- docs/
-|   `-- evaluation.md
+|   |-- evaluation.md
+|   `-- observability.md
 `-- infra/
     `-- docker-compose.yml
 ```

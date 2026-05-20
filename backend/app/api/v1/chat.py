@@ -31,7 +31,10 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.observability import get_tracer
+
 router = APIRouter(prefix="/chat", tags=["Chat"])
+tracer = get_tracer(__name__)
 
 
 class ChatRequest(BaseModel):
@@ -43,25 +46,29 @@ async def event_stream(graph, message: str, session_id: str):
     config = {"configurable": {"thread_id": session_id}}
     inputs = {"messages": [{"role": "user", "content": message}]}
 
-    async for event in graph.astream_events(inputs, config=config, version="v2"):
-        if event["event"] == "on_chat_model_stream":
-            metadata = event.get("metadata") or {}
-            if metadata.get("langgraph_node") != "llm":
-                continue
+    with tracer.start_as_current_span("chat.agent_stream") as span:
+        span.set_attribute("abhimart.session_id", session_id)
+        span.set_attribute("abhimart.message_length", len(message))
 
-            chunk = event["data"]["chunk"]
-            content = chunk.content
+        async for event in graph.astream_events(inputs, config=config, version="v2"):
+            if event["event"] == "on_chat_model_stream":
+                metadata = event.get("metadata") or {}
+                if metadata.get("langgraph_node") != "llm":
+                    continue
 
-            if isinstance(content, list):
-                text = "".join(
-                    part.get("text", "") if isinstance(part, dict) else str(part)
-                    for part in content
-                )
-            else:
-                text = content
+                chunk = event["data"]["chunk"]
+                content = chunk.content
 
-            if text:
-                yield f"data: {json.dumps({'text': text})}\n\n"
+                if isinstance(content, list):
+                    text = "".join(
+                        part.get("text", "") if isinstance(part, dict) else str(part)
+                        for part in content
+                    )
+                else:
+                    text = content
+
+                if text:
+                    yield f"data: {json.dumps({'text': text})}\n\n"
 
     yield "data: [DONE]\n\n"
 
@@ -69,20 +76,25 @@ async def event_stream(graph, message: str, session_id: str):
 @router.post("")
 async def chat(request: ChatRequest, req: Request):
     graph = req.app.state.graph
-    return StreamingResponse(
-        event_stream(graph, request.message, request.session_id),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    with tracer.start_as_current_span("chat.request") as span:
+        span.set_attribute("abhimart.session_id", request.session_id)
+        span.set_attribute("abhimart.message_length", len(request.message))
+        return StreamingResponse(
+            event_stream(graph, request.message, request.session_id),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
     
 @router.get("/history/{session_id}")
 async def get_history(session_id: str, req: Request):
     graph = req.app.state.graph
     config = {"configurable": {"thread_id": session_id}}
-    state = await graph.aget_state(config)
+    with tracer.start_as_current_span("chat.history") as span:
+        span.set_attribute("abhimart.session_id", session_id)
+        state = await graph.aget_state(config)
     return {
         "messages": [
             {"role": m.type, "content": m.content}

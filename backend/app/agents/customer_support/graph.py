@@ -13,9 +13,11 @@ from app.agents.customer_support.tools import (
     search_faq,
     assess_return_eligibility,
 )
+from app.observability import get_tracer
 
 settings = get_settings()
 os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
+tracer = get_tracer(__name__)
 
 # --- Tools ---
 tools = [lookup_order, get_product_info, search_faq, assess_return_eligibility]
@@ -55,7 +57,10 @@ When answering policy questions:
 async def llm_node(state: MessagesState) -> dict:
     # Prepend system prompt on every call
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + state["messages"]
-    response = await llm_with_tools.ainvoke(messages)
+    with tracer.start_as_current_span("agent.llm_node") as span:
+        span.set_attribute("abhimart.agent", "customer_support")
+        span.set_attribute("abhimart.message_count", len(messages))
+        response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
 

@@ -12,6 +12,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
+from app.observability import get_tracer
+
+tracer = get_tracer(__name__)
 
 PolicyDecision = Literal["eligible", "likely_not_eligible", "need_more_info"]
 PolicyConfidence = Literal["low", "medium", "high"]
@@ -73,17 +76,23 @@ async def classify_return_eligibility(
     """Classify return eligibility from customer question and policy text."""
     structured_llm = _build_policy_decision_llm()
 
-    response = await structured_llm.ainvoke(
-        [
-            SystemMessage(content=POLICY_DECISION_PROMPT),
-            HumanMessage(
-                content=(
-                    f"Customer question:\n{customer_question}\n\n"
-                    f"Source filename:\n{source}\n\n"
-                    f"Policy text:\n{policy_text}"
-                )
-            ),
-        ]
-    )
+    with tracer.start_as_current_span("policy.classify_return_eligibility") as span:
+        span.set_attribute("abhimart.policy_source", source)
+        span.set_attribute("abhimart.question_length", len(customer_question))
+        span.set_attribute("abhimart.policy_text_length", len(policy_text))
+        response = await structured_llm.ainvoke(
+            [
+                SystemMessage(content=POLICY_DECISION_PROMPT),
+                HumanMessage(
+                    content=(
+                        f"Customer question:\n{customer_question}\n\n"
+                        f"Source filename:\n{source}\n\n"
+                        f"Policy text:\n{policy_text}"
+                    )
+                ),
+            ]
+        )
+        span.set_attribute("abhimart.policy_decision", response.decision)
+        span.set_attribute("abhimart.policy_confidence", response.confidence)
 
     return response

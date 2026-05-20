@@ -1028,6 +1028,13 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Latest inspected LangSmith experiment after syncing the updated dataset and filtering nested model streams: 8/8 passing.
 - Added local LLM-as-judge quality evaluator in `evals/judge_results.py`.
 - Latest local LLM-as-judge quality eval: 8/8 passing.
+- Added `docs/observability.md` as a living learning note for OpenTelemetry and
+  how it complements LangSmith in this project.
+- Added the first OpenTelemetry implementation:
+  - console span exporter for local learning
+  - FastAPI instrumentation
+  - manual spans around chat streaming, agent LLM nodes, tools, RAG retrieval,
+    and structured return-policy classification
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth
