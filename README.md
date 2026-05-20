@@ -19,7 +19,7 @@ dataset, LangSmith experiment workflow, and Stage 4 evaluation learning guide.
 | Stage 1 | LangGraph agent + streaming SSE chat API | Complete |
 | Stage 2 | Tools (order lookup, product info) + Postgres-backed memory | Complete |
 | Stage 3 | RAG pipeline - pgvector + Gemini embeddings + `search_faq` tool | Complete |
-| Stage 4 | Local eval harness complete; LangSmith experiments + observability next | In progress |
+| Stage 4 | Local eval harness, LangSmith experiments, and LLM-as-judge checks running; observability next | In progress |
 | Stage 5 | Guardrails + multi-agent | Planned |
 | Stage 6 | React frontend + production deployment | Planned |
 
@@ -35,32 +35,33 @@ Coming later: Redis, React 19, TypeScript, OpenTelemetry, AWS.
 
 ```text
 abhimart/
-├── backend/
-│   ├── app/
-│   │   ├── config.py                   # Pydantic Settings
-│   │   ├── database.py                 # Async SQLAlchemy engine/session
-│   │   ├── main.py                     # FastAPI app and LangGraph wiring
-│   │   ├── seed.py                     # Seed products, users, orders
-│   │   ├── models/                     # SQLAlchemy ORM models
-│   │   ├── api/v1/                     # Products and chat endpoints
-│   │   ├── agents/customer_support/    # LangGraph graph and tools
-│   │   ├── rag/                        # Knowledge base ingestion/docs
-│   │   └── static/chat.html            # Simple chat UI for testing
-│   ├── alembic/                        # Database migrations
-│   ├── evals/
-│   │   ├── datasets/stage4_golden.jsonl
-│   │   ├── datasets/policy_decision_golden.jsonl
-│   │   ├── run_eval.py
-│   │   ├── score_results.py
-│   │   ├── run_policy_decision_eval.py
-│   │   ├── langsmith_dataset.py
-│   │   └── langsmith_run.py
-│   ├── pyproject.toml
-│   └── .env.example
-├── docs/
-│   └── evaluation.md
-└── infra/
-    └── docker-compose.yml
+|-- backend/
+|   |-- app/
+|   |   |-- config.py                   # Pydantic Settings
+|   |   |-- database.py                 # Async SQLAlchemy engine/session
+|   |   |-- main.py                     # FastAPI app and LangGraph wiring
+|   |   |-- seed.py                     # Seed products, users, orders
+|   |   |-- models/                     # SQLAlchemy ORM models
+|   |   |-- api/v1/                     # Products and chat endpoints
+|   |   |-- agents/customer_support/    # LangGraph graph and tools
+|   |   |-- rag/                        # Knowledge base ingestion/docs
+|   |   `-- static/chat.html            # Simple chat UI for testing
+|   |-- alembic/                        # Database migrations
+|   |-- evals/
+|   |   |-- datasets/stage4_golden.jsonl
+|   |   |-- datasets/policy_decision_golden.jsonl
+|   |   |-- run_eval.py
+|   |   |-- score_results.py
+|   |   |-- judge_results.py
+|   |   |-- run_policy_decision_eval.py
+|   |   |-- langsmith_dataset.py
+|   |   `-- langsmith_run.py
+|   |-- pyproject.toml
+|   `-- .env.example
+|-- docs/
+|   `-- evaluation.md
+`-- infra/
+    `-- docker-compose.yml
 ```
 
 ## Local development

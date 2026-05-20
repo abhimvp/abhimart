@@ -980,9 +980,9 @@ These appear in the source materials but won't be built. Abhi should know they e
 
 ---
 
-## Section 16 — Current state (update as we go)
+## Section 16 - Current state (update as we go)
 
-**Current stage:** Stage 4 — Evaluation + observability, local eval harness complete; LangSmith experiments next
+**Current stage:** Stage 4 - Evaluation + observability, eval harness and LangSmith experiments running; observability depth next
 
 **Stage 0 status:** Complete
 
@@ -994,7 +994,7 @@ These appear in the source materials but won't be built. Abhi should know they e
 
 **Stage 4 status:** In progress
 
-**Latest progress update — May 15, 2026:**
+**Latest progress update - May 20, 2026:**
 
 - Built the first local Stage 4 eval harness under `backend/evals/`.
 - Added `datasets/stage4_golden.jsonl` with 8 golden customer-support examples covering:
@@ -1026,6 +1026,8 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Updated `chat.py` and `run_eval.py` to filter nested model stream events so structured-output JSON from internal tool calls is not sent as customer-facing text.
 - Latest full local eval suite after wiring structured eligibility: 8/8 passing.
 - Latest inspected LangSmith experiment after syncing the updated dataset and filtering nested model streams: 8/8 passing.
+- Added local LLM-as-judge quality evaluator in `evals/judge_results.py`.
+- Latest local LLM-as-judge quality eval: 8/8 passing.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth
@@ -1035,7 +1037,7 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Important learning: the first return-policy failure was not retrieval. The agent retrieved/cited the right policy but synthesized it too permissively. This was diagnosed as a policy-reasoning/synthesis failure and fixed through targeted prompt changes plus better evaluator checks.
 - Next Stage 4 work:
   - compare prompt/model versions over time in LangSmith
-  - add LLM-as-judge only for semantic checks that deterministic evaluators cannot cover cleanly
+  - optionally wire the LLM-as-judge evaluator into LangSmith experiment runs
   - use LangSmith experiment comparisons to track future prompt/model/tool changes
   - begin observability work beyond LangSmith, especially OpenTelemetry/logs/metrics/traces
 

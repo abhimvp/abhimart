@@ -18,6 +18,7 @@ backend/evals/
 │   └── policy_decision_golden.jsonl
 ├── run_eval.py
 ├── score_results.py
+├── judge_results.py
 ├── run_policy_decision_eval.py
 ├── langsmith_dataset.py
 └── langsmith_run.py
@@ -124,13 +125,14 @@ LangSmith stores:
 
 ## Current Baseline
 
-As of May 15, 2026:
+As of May 20, 2026:
 
 | Eval mode | Result |
 |---|---:|
 | Local deterministic evals | 8/8 passing |
 | LangSmith latest inspected experiment | 8/8 passing |
 | Structured policy decision evals | 3/3 passing |
+| Local LLM-as-judge quality evals | 8/8 passing |
 
 The previously flaky case was:
 
@@ -163,13 +165,35 @@ agent eval now requires return-eligibility questions to use
 The streaming layer also filters nested model events so structured-output model
 calls inside tools are not leaked to the customer-facing SSE response.
 
+## LLM-as-Judge
+
+`judge_results.py` adds a local LLM-as-judge pass over saved eval results.
+
+The judge does not replace deterministic checks. It adds a semantic quality
+layer for questions such as:
+
+- Did the answer directly address the customer?
+- Was the answer faithful to the expected behavior?
+- Was the answer appropriately cautious for policy/security cases?
+- Did the answer avoid unsupported claims?
+- Was the answer clear and helpful?
+
+Current local judge result:
+
+```text
+8/8 passing
+```
+
+The judge uses structured output with:
+
+- `score`: `0` or `1`
+- `reasoning`: brief explanation
+
 ## Next Improvements
 
 - Add structured policy eligibility decisions:
-- Rerun LangSmith experiments after structured eligibility tool wiring.
+- Optionally add LLM-as-judge into LangSmith experiments.
 - Compare prompt/model versions in LangSmith.
-- Add LLM-as-judge only for semantic checks that deterministic rules cannot
-  capture cleanly.
 - Add OpenTelemetry-based system observability for traces, logs, and metrics.
 
 ## Learning Checklist
