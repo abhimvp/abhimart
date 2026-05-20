@@ -20,6 +20,7 @@ from app.agents.customer_support.guardrails import check_input_guardrails
 from app.agents.customer_support.refund import (
     complete_refund_review,
     prepare_refund_review,
+    process_approved_refund,
 )
 from app.observability import get_tracer
 
@@ -109,10 +110,19 @@ async def llm_node(state: MessagesState) -> dict:
                     approved=True,
                     reviewer_note=reviewer_note,
                 )
+                process_result = (
+                    await process_approved_refund(
+                        refund_request_id=refund_review.payload[
+                            "refund_request_id"
+                        ],
+                    )
+                    if review_result["status"] == "approved"
+                    else review_result
+                )
                 response = (
-                    "The refund request has been approved for the next support "
-                    f"processing step for Order #{order_preview}. No automatic "
-                    "payment action was performed by the AI agent."
+                    "The refund request was approved and marked as processed "
+                    f"for Order #{order_preview}. This is a simulated processing "
+                    "step; no external payment provider was called."
                 )
             else:
                 review_result = await complete_refund_review(
@@ -120,6 +130,7 @@ async def llm_node(state: MessagesState) -> dict:
                     approved=False,
                     reviewer_note=reviewer_note,
                 )
+                process_result = review_result
                 response = (
                     "The refund request was not approved for processing by the "
                     f"human reviewer for Order #{order_preview}."
@@ -129,6 +140,11 @@ async def llm_node(state: MessagesState) -> dict:
                 response = (
                     "This refund request was already reviewed earlier. "
                     f"Current status: {review_result['status']}."
+                )
+            elif approved and not process_result["changed"]:
+                response = (
+                    "This refund request was approved, but processing did not "
+                    f"run because the current status is {process_result['status']}."
                 )
 
             if reviewer_note:

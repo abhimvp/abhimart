@@ -150,6 +150,53 @@ async def complete_refund_review(
         }
 
 
+async def process_approved_refund(
+    *,
+    refund_request_id: str,
+) -> dict[str, Any]:
+    """Simulate processing an approved refund exactly once.
+
+    This does not call a payment provider. It moves the local request state from
+    approved to processed so the rest of the workflow can be tested safely.
+    """
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(RefundRequest).where(RefundRequest.id == refund_request_id)
+        )
+        refund_request = result.scalar_one_or_none()
+
+        if not refund_request:
+            return {
+                "found": False,
+                "status": "missing",
+                "changed": False,
+            }
+
+        if refund_request.status == "processed":
+            return {
+                "found": True,
+                "status": "processed",
+                "changed": False,
+            }
+
+        if refund_request.status != "approved":
+            return {
+                "found": True,
+                "status": refund_request.status,
+                "changed": False,
+            }
+
+        refund_request.status = "processed"
+        await session.commit()
+
+        return {
+            "found": True,
+            "status": "processed",
+            "changed": True,
+        }
+
+
 async def prepare_refund_review(message: str) -> RefundReviewResult:
     """Build a human-review payload for refund requests with customer identity.
 

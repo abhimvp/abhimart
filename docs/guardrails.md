@@ -361,13 +361,15 @@ Customer asks for refund and provides email
 -> reviewer approves/rejects
 -> caller resumes with Command(resume={...})
 -> graph records approved/rejected on the same refund request
+-> approved requests move to processed in a simulated processing step
 -> graph returns the final customer-facing message
 ```
 
-The refund gate does not process money. It records approval state for a proposed
-refund. This proves the safer production pattern: the agent can prepare a
-proposed action, but a human must approve before any payment/refund write step
-exists.
+The refund gate does not process real money. It records approval state for a
+proposed refund, then simulates the processing transition by marking approved
+requests as `processed`. This proves the safer production pattern: the agent can
+prepare a proposed action, a human approves it, and only then does the write
+state move forward.
 
 ## Idempotency
 
@@ -415,10 +417,33 @@ uv run python evals/run_refund_hitl_eval.py
 
 This eval checks:
 
-- approval records `approved`
+- approval records `processed`
 - rejection records `rejected`
 - duplicate logical requests reuse the same idempotency key
 - refund requests for an unmatched product ask for clearer order/product info
+
+## Refund State Machine
+
+The current local state machine is:
+
+```text
+pending_review -> rejected
+pending_review -> approved -> processed
+```
+
+`processed` is still simulated. In a real production system, this is where a
+separate service would call a payment provider or refund API.
+
+Failure modes to think about:
+
+- approval succeeds but processing fails
+- processing succeeds but the app crashes before recording `processed`
+- the payment provider receives the same refund request twice
+- a human approves the wrong order
+- a retry sees stale status and tries to process again
+
+The current defense is local idempotency and status checks. A future real refund
+integration would also need a provider-side idempotency key and an audit trail.
 
 Manual API test:
 

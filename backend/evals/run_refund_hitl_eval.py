@@ -108,8 +108,11 @@ async def test_approval(graph, run_id: str):
     )
     status = await _refund_status(payload["refund_request_id"])
 
-    _assert(status == "approved", f"expected approved status, got {status}")
-    _assert("approved" in final_answer.lower(), "final answer did not mention approval")
+    _assert(status == "processed", f"expected processed status, got {status}")
+    _assert(
+        "processed" in final_answer.lower(),
+        "final answer did not mention processing",
+    )
 
 
 async def test_rejection(graph, run_id: str):
