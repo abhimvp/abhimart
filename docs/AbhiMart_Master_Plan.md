@@ -982,7 +982,7 @@ These appear in the source materials but won't be built. Abhi should know they e
 
 ## Section 16 - Current state (update as we go)
 
-**Current stage:** Stage 4 - Evaluation + observability, eval harness and LangSmith experiments running; observability depth next
+**Current stage:** Stage 6 - Multi-agent + React frontend foundation next
 
 **Stage 0 status:** Complete
 
@@ -992,7 +992,13 @@ These appear in the source materials but won't be built. Abhi should know they e
 
 **Stage 3 status:** Complete
 
-**Stage 4 status:** In progress
+**Stage 4 status:** Complete
+
+**Stage 5 status:** Complete for project scope. The refund workflow is simulated
+and safe: guardrails block risky requests, HITL pauses before sensitive action,
+refund requests are durable/idempotent, and approved requests move to simulated
+`processed` state. Real payment-provider refunds, production auth, and full audit
+trails are intentionally deferred.
 
 **Latest progress update - May 20, 2026:**
 
@@ -1087,9 +1093,10 @@ These appear in the source materials but won't be built. Abhi should know they e
   - explicitly handle opened/used/installed/assembled/damaged/missing-packaging conditions
   - cite exact source filenames such as `[Source: return-policy.md]`
 - Important learning: the first return-policy failure was not retrieval. The agent retrieved/cited the right policy but synthesized it too permissively. This was diagnosed as a policy-reasoning/synthesis failure and fixed through targeted prompt changes plus better evaluator checks.
-- Next Stage 5 work:
-  - add provider-style idempotency/audit concepts before any real payment integration
-  - expose the approval flow cleanly in the frontend later
+- Next Stage 6 work:
+  - create the React + TypeScript frontend foundation
+  - move the proven SSE/HITL approval flow from `static/chat.html` into React
+  - introduce a custom `useChatStream` hook for AbhiMart's FastAPI SSE payloads
 
 **Decisions locked:**
 
@@ -1125,8 +1132,8 @@ These appear in the source materials but won't be built. Abhi should know they e
 - [x] Stage 1 — First chatting agent
 - [x] Stage 2 — Tools + memory + durable execution
 - [x] Stage 3 — RAG
-- [ ] Stage 4 — Evaluation + observability (in progress: local deterministic eval harness complete; LangSmith experiments next)
-- [ ] Stage 5 — Write actions + HITL + guardrails
+- [x] Stage 4 — Evaluation + observability
+- [x] Stage 5 — Write actions + HITL + guardrails
 - [ ] Stage 6 — Multi-agent + frontend
 - [ ] Stage 7 — Queues + scheduled jobs + cost engineering
 - [ ] Stage 8 — Production deployment + CI/CD

@@ -28,7 +28,7 @@ approval.
 | Stage 2 | Tools (order lookup, product info) + Postgres-backed memory | Complete |
 | Stage 3 | RAG pipeline - pgvector + Gemini embeddings + `search_faq` tool | Complete |
 | Stage 4 | Eval harness, LangSmith experiments, LLM-as-judge checks, OpenTelemetry, Jaeger, logs, and metrics | Complete |
-| Stage 5 | Guardrails, refund approval gate, and human-in-the-loop write-action safety | In progress |
+| Stage 5 | Guardrails, refund approval gate, and human-in-the-loop write-action safety | Complete |
 | Stage 6 | React frontend + production deployment | Planned |
 
 ## Stack
