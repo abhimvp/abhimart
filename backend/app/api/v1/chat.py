@@ -50,6 +50,27 @@ class ChatRequest(BaseModel):
     session_id: str = "default"
 
 
+def extract_direct_llm_text(event: dict) -> str:
+    """Extract text returned directly by the llm graph node.
+
+    Guardrails can return an AIMessage without invoking the chat model. In that
+    path LangGraph emits an on_chain_stream event, not token stream events.
+    """
+    if event.get("event") != "on_chain_stream" or event.get("name") != "llm":
+        return ""
+
+    chunk = (event.get("data") or {}).get("chunk")
+    if not isinstance(chunk, dict):
+        return ""
+
+    messages = chunk.get("messages") or []
+    if not messages:
+        return ""
+
+    content = getattr(messages[-1], "content", "")
+    return content if isinstance(content, str) else ""
+
+
 async def event_stream(graph, message: str, session_id: str):
     config = {"configurable": {"thread_id": session_id}}
     inputs = {"messages": [{"role": "user", "content": message}]}
@@ -68,6 +89,12 @@ async def event_stream(graph, message: str, session_id: str):
 
         try:
             async for event in graph.astream_events(inputs, config=config, version="v2"):
+                direct_text = extract_direct_llm_text(event)
+                if direct_text and chunk_count == 0:
+                    chunk_count += 1
+                    yield f"data: {json.dumps({'text': direct_text})}\n\n"
+                    continue
+
                 if event["event"] == "on_chat_model_stream":
                     metadata = event.get("metadata") or {}
                     if metadata.get("langgraph_node") != "llm":

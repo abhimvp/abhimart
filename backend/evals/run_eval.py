@@ -98,6 +98,27 @@ def is_top_level_agent_llm_event(event: dict[str, Any]) -> bool:
     return metadata.get("langgraph_node") == "llm"
 
 
+def extract_direct_llm_text(event: dict[str, Any]) -> str:
+    """Extract text returned directly by the llm graph node.
+
+    Guardrails can return an AIMessage without invoking the chat model. In that
+    path LangGraph emits an on_chain_stream event, not token stream events.
+    """
+    if event.get("event") != "on_chain_stream" or event.get("name") != "llm":
+        return ""
+
+    chunk = (event.get("data") or {}).get("chunk")
+    if not isinstance(chunk, dict):
+        return ""
+
+    messages = chunk.get("messages") or []
+    if not messages:
+        return ""
+
+    content = getattr(messages[-1], "content", "")
+    return content if isinstance(content, str) else ""
+
+
 async def run_one_example(graph: Any, example: dict[str, Any]) -> dict[str, Any]:
     """Run one dataset example through the real agent graph."""
     message = example["inputs"]["message"]
@@ -137,6 +158,11 @@ async def run_one_example(graph: Any, example: dict[str, Any]) -> dict[str, Any]
                     "input": event_data.get("input"),
                 }
             )
+
+        direct_text = extract_direct_llm_text(event)
+        if direct_text and not final_answer_parts:
+            final_answer_parts.append(direct_text)
+            continue
 
         if event_name == "on_chat_model_stream":
             if not is_top_level_agent_llm_event(event):
@@ -185,6 +211,12 @@ async def main() -> None:
         help="Seconds to wait between examples to reduce rate-limit pressure.",
     )
     parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=DATASET_PATH,
+        help="JSONL dataset to run.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT_PATH,
@@ -201,7 +233,7 @@ async def main() -> None:
     if args.fresh and args.output.exists():
         args.output.unlink()
 
-    examples = load_jsonl(DATASET_PATH)
+    examples = load_jsonl(args.dataset)
 
     if args.start:
         examples = examples[args.start :]
@@ -211,7 +243,7 @@ async def main() -> None:
 
     graph = build_graph(checkpointer=InMemorySaver())
 
-    print(f"Loaded {len(examples)} eval examples from {DATASET_PATH}")
+    print(f"Loaded {len(examples)} eval examples from {args.dataset}")
     print()
 
     for index, example in enumerate(examples, start=1):

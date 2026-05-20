@@ -1047,6 +1047,14 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Added first Prometheus-compatible app metrics behind `/metrics`:
   chat request count, chat stream duration, tool calls/duration, RAG retrieval
   count/duration, error count, and policy decision count.
+- Started Stage 5 documentation with `docs/guardrails.md`, covering PII leaks,
+  prompt injection, tool misuse, write actions, human-in-the-loop approval, and
+  guardrail eval strategy.
+- Added first Stage 5 guardrail eval dataset at
+  `backend/evals/datasets/stage5_guardrails.jsonl`.
+- Added first deterministic input guardrail in
+  `app/agents/customer_support/guardrails.py` and wired it before the LLM/tool
+  loop.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth

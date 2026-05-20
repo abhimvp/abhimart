@@ -2,6 +2,8 @@
 
 import os
 
+import structlog
+from langchain_core.messages import AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, START, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -13,11 +15,13 @@ from app.agents.customer_support.tools import (
     search_faq,
     assess_return_eligibility,
 )
+from app.agents.customer_support.guardrails import check_input_guardrails
 from app.observability import get_tracer
 
 settings = get_settings()
 os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
 tracer = get_tracer(__name__)
+logger = structlog.get_logger()
 
 # --- Tools ---
 tools = [lookup_order, get_product_info, search_faq, assess_return_eligibility]
@@ -55,6 +59,19 @@ When answering policy questions:
 
 # --- Nodes ---
 async def llm_node(state: MessagesState) -> dict:
+    latest_message = state["messages"][-1] if state.get("messages") else None
+    latest_content = getattr(latest_message, "content", "")
+
+    if isinstance(latest_content, str):
+        guardrail = check_input_guardrails(latest_content)
+        if guardrail.blocked:
+            logger.info(
+                "input_guardrail_blocked",
+                reason=guardrail.reason,
+                message_length=len(latest_content),
+            )
+            return {"messages": [AIMessage(content=guardrail.response)]}
+
     # Prepend system prompt on every call
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + state["messages"]
     with tracer.start_as_current_span("agent.llm_node") as span:

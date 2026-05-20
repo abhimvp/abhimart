@@ -15,6 +15,10 @@ See [Observability Notes](docs/observability.md) for the project explanation of
 OpenTelemetry, traces/spans/metrics/logs, and how observability fits alongside
 LangSmith.
 
+See [Guardrails Notes](docs/guardrails.md) for Stage 5 safety concepts such as
+PII, prompt injection, tool misuse, write actions, and human-in-the-loop
+approval.
+
 ## Status
 
 | Stage | Description | Status |
@@ -64,6 +68,7 @@ abhimart/
 |   `-- .env.example
 |-- docs/
 |   |-- evaluation.md
+|   |-- guardrails.md
 |   `-- observability.md
 `-- infra/
     `-- docker-compose.yml
