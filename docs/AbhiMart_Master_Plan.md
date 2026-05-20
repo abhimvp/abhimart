@@ -1039,6 +1039,8 @@ These appear in the source materials but won't be built. Abhi should know they e
   - Jaeger service in Docker Compose
   - OTLP exporter support for sending traces to `localhost:4317`
   - docs for opening `http://localhost:16686` and inspecting request waterfalls
+- Added privacy-safe structured logs for chat lifecycle events, tool outcomes,
+  RAG retrieval outcomes, and policy classification decisions.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth

@@ -6,7 +6,9 @@ the model should classify the case before writing a customer-facing answer.
 """
 
 from typing import Literal
+from time import perf_counter
 
+import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
@@ -15,6 +17,7 @@ from app.config import get_settings
 from app.observability import get_tracer
 
 tracer = get_tracer(__name__)
+logger = structlog.get_logger()
 
 PolicyDecision = Literal["eligible", "likely_not_eligible", "need_more_info"]
 PolicyConfidence = Literal["low", "medium", "high"]
@@ -77,9 +80,16 @@ async def classify_return_eligibility(
     structured_llm = _build_policy_decision_llm()
 
     with tracer.start_as_current_span("policy.classify_return_eligibility") as span:
+        start = perf_counter()
         span.set_attribute("abhimart.policy_source", source)
         span.set_attribute("abhimart.question_length", len(customer_question))
         span.set_attribute("abhimart.policy_text_length", len(policy_text))
+        logger.info(
+            "policy_classification_started",
+            policy_source=source,
+            question_length=len(customer_question),
+            policy_text_length=len(policy_text),
+        )
         response = await structured_llm.ainvoke(
             [
                 SystemMessage(content=POLICY_DECISION_PROMPT),
@@ -94,5 +104,12 @@ async def classify_return_eligibility(
         )
         span.set_attribute("abhimart.policy_decision", response.decision)
         span.set_attribute("abhimart.policy_confidence", response.confidence)
+        logger.info(
+            "policy_classification_completed",
+            policy_source=source,
+            policy_decision=response.decision,
+            policy_confidence=response.confidence,
+            duration_ms=round((perf_counter() - start) * 1000, 2),
+        )
 
     return response

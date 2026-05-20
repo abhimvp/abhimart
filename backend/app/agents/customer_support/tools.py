@@ -5,6 +5,9 @@ from sqlalchemy import select
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from langchain_postgres import PGVector
 from pathlib import Path
+from time import perf_counter
+
+import structlog
 from app.database import async_session_factory
 from app.models.order import Order
 from app.models.product import Product
@@ -18,6 +21,7 @@ import json
 _settings = get_settings()
 _DOCS_DIR = Path(__file__).resolve().parents[2] / "rag" / "docs"
 tracer = get_tracer(__name__)
+logger = structlog.get_logger()
 
 
 def _email_domain(email: str) -> str:
@@ -38,8 +42,11 @@ async def lookup_order(email: str) -> str:
         email: The customer's email address
     """
     with tracer.start_as_current_span("tool.lookup_order") as span:
+        start = perf_counter()
+        email_domain = _email_domain(email)
         span.set_attribute("abhimart.tool", "lookup_order")
-        span.set_attribute("abhimart.email_domain", _email_domain(email))
+        span.set_attribute("abhimart.email_domain", email_domain)
+        logger.info("tool_lookup_order_started", email_domain=email_domain)
 
         async with async_session_factory() as session:
             result = await session.execute(select(User).where(User.email == email))
@@ -47,6 +54,13 @@ async def lookup_order(email: str) -> str:
 
             if not user:
                 span.set_attribute("abhimart.customer_found", False)
+                logger.info(
+                    "tool_lookup_order_completed",
+                    email_domain=email_domain,
+                    customer_found=False,
+                    order_count=0,
+                    duration_ms=round((perf_counter() - start) * 1000, 2),
+                )
                 return f"No customer found with email '{email}'."
 
             span.set_attribute("abhimart.customer_found", True)
@@ -57,6 +71,13 @@ async def lookup_order(email: str) -> str:
             )
             orders = result.scalars().all()
             span.set_attribute("abhimart.order_count", len(orders))
+            logger.info(
+                "tool_lookup_order_completed",
+                email_domain=email_domain,
+                customer_found=True,
+                order_count=len(orders),
+                duration_ms=round((perf_counter() - start) * 1000, 2),
+            )
 
             if not orders:
                 return f"No orders found for {user.name} ({email})."
@@ -86,8 +107,13 @@ async def get_product_info(product_name: str) -> str:
         product_name: The product name or partial name to search for
     """
     with tracer.start_as_current_span("tool.get_product_info") as span:
+        start = perf_counter()
         span.set_attribute("abhimart.tool", "get_product_info")
         span.set_attribute("abhimart.product_query_length", len(product_name))
+        logger.info(
+            "tool_get_product_info_started",
+            product_query_length=len(product_name),
+        )
 
         async with async_session_factory() as session:
             result = await session.execute(
@@ -100,6 +126,12 @@ async def get_product_info(product_name: str) -> str:
             )
             products = result.scalars().all()
             span.set_attribute("abhimart.product_result_count", len(products))
+            logger.info(
+                "tool_get_product_info_completed",
+                product_query_length=len(product_name),
+                product_result_count=len(products),
+                duration_ms=round((perf_counter() - start) * 1000, 2),
+            )
 
             if not products:
                 return f"No products found matching '{product_name}'."
@@ -145,12 +177,21 @@ _vector_store = PGVector(
 async def _retrieve_knowledge_docs(query: str, *, k: int = 3):
     """Retrieve knowledge-base chunks from pgvector."""
     with tracer.start_as_current_span("rag.retrieve") as span:
+        start = perf_counter()
         span.set_attribute("abhimart.query_length", len(query))
         span.set_attribute("abhimart.retrieval_k", k)
         docs = await asyncio.to_thread(_vector_store.similarity_search, query, k)
         span.set_attribute("abhimart.retrieved_doc_count", len(docs))
         sources = sorted({doc.metadata.get("source", "unknown") for doc in docs})
         span.set_attribute("abhimart.retrieved_sources", ",".join(sources))
+        logger.info(
+            "rag_retrieval_completed",
+            query_length=len(query),
+            retrieval_k=k,
+            retrieved_doc_count=len(docs),
+            retrieved_sources=sources,
+            duration_ms=round((perf_counter() - start) * 1000, 2),
+        )
         return docs
 
 
@@ -207,8 +248,13 @@ async def assess_return_eligibility(customer_question: str) -> str:
         customer_question: The customer's return/refund eligibility question.
     """
     with tracer.start_as_current_span("tool.assess_return_eligibility") as span:
+        start = perf_counter()
         span.set_attribute("abhimart.tool", "assess_return_eligibility")
         span.set_attribute("abhimart.question_length", len(customer_question))
+        logger.info(
+            "tool_assess_return_eligibility_started",
+            question_length=len(customer_question),
+        )
 
         docs = await _retrieve_knowledge_docs(
             f"return policy eligibility {customer_question}",
@@ -222,6 +268,12 @@ async def assess_return_eligibility(customer_question: str) -> str:
 
         if not policy_docs:
             span.set_attribute("abhimart.policy_found", False)
+            logger.info(
+                "tool_assess_return_eligibility_completed",
+                question_length=len(customer_question),
+                policy_found=False,
+                duration_ms=round((perf_counter() - start) * 1000, 2),
+            )
             return json.dumps(
                 {
                     "decision": "need_more_info",
@@ -249,5 +301,14 @@ async def assess_return_eligibility(customer_question: str) -> str:
         )
         span.set_attribute("abhimart.policy_decision", decision.decision)
         span.set_attribute("abhimart.policy_confidence", decision.confidence)
+        logger.info(
+            "tool_assess_return_eligibility_completed",
+            question_length=len(customer_question),
+            policy_found=True,
+            policy_source=source,
+            policy_decision=decision.decision,
+            policy_confidence=decision.confidence,
+            duration_ms=round((perf_counter() - start) * 1000, 2),
+        )
 
         return json.dumps(decision.model_dump(), ensure_ascii=False)

@@ -198,6 +198,48 @@ POST /v1/chat
 This is how engineers usually inspect timing and nesting. The UI calculates
 durations and shows parent/child relationships automatically.
 
+## Structured Logs
+
+Traces show the shape and timing of one request. Logs record important events
+and outcomes.
+
+For AbhiMart, structured logs are privacy-safe event records such as:
+
+```text
+chat_request_received
+chat_stream_started
+chat_stream_completed
+chat_stream_failed
+tool_lookup_order_started
+tool_lookup_order_completed
+tool_get_product_info_started
+tool_get_product_info_completed
+rag_retrieval_completed
+policy_classification_started
+policy_classification_completed
+tool_assess_return_eligibility_started
+tool_assess_return_eligibility_completed
+```
+
+These logs include operational metadata such as:
+
+- `session_id`
+- message/query length
+- duration in milliseconds
+- result counts
+- retrieved source filenames
+- policy decision/confidence
+- email domain only, not full customer email
+
+They intentionally avoid raw customer messages, full emails, private order
+details, and full retrieved document text.
+
+Interview-ready distinction:
+
+> Traces help me understand where time went in a request. Structured logs help
+> me understand what important events happened and what decisions/outcomes were
+> produced.
+
 Later, we can add metrics such as:
 
 - request count
