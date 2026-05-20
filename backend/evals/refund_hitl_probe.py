@@ -43,7 +43,10 @@ async def main():
     args = parser.parse_args()
 
     config = {"configurable": {"thread_id": args.session_id}}
-    inputs = {"messages": [{"role": "user", "content": args.message}]}
+    message = args.message
+    if message == DEFAULT_MESSAGE:
+        message = f"{message} Test request id: {args.session_id}."
+    inputs = {"messages": [{"role": "user", "content": message}]}
 
     checkpointer = InMemorySaver()
     graph = build_graph(checkpointer)

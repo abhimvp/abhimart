@@ -17,7 +17,10 @@ from app.agents.customer_support.tools import (
     assess_return_eligibility,
 )
 from app.agents.customer_support.guardrails import check_input_guardrails
-from app.agents.customer_support.refund import prepare_refund_review
+from app.agents.customer_support.refund import (
+    complete_refund_review,
+    prepare_refund_review,
+)
 from app.observability import get_tracer
 
 settings = get_settings()
@@ -101,15 +104,31 @@ async def llm_node(state: MessagesState) -> dict:
             order_preview = refund_review.payload["order_id_preview"]
 
             if approved:
+                review_result = await complete_refund_review(
+                    refund_request_id=refund_review.payload["refund_request_id"],
+                    approved=True,
+                    reviewer_note=reviewer_note,
+                )
                 response = (
                     "The refund request has been approved for the next support "
                     f"processing step for Order #{order_preview}. No automatic "
                     "payment action was performed by the AI agent."
                 )
             else:
+                review_result = await complete_refund_review(
+                    refund_request_id=refund_review.payload["refund_request_id"],
+                    approved=False,
+                    reviewer_note=reviewer_note,
+                )
                 response = (
                     "The refund request was not approved for processing by the "
                     f"human reviewer for Order #{order_preview}."
+                )
+
+            if not review_result["changed"]:
+                response = (
+                    "This refund request was already reviewed earlier. "
+                    f"Current status: {review_result['status']}."
                 )
 
             if reviewer_note:

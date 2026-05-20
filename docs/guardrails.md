@@ -343,6 +343,8 @@ Files:
 
 ```text
 backend/app/agents/customer_support/refund.py
+backend/app/models/refund_request.py
+backend/alembic/versions/e38d7b0db2bb_create_refund_requests_table.py
 backend/app/agents/customer_support/graph.py
 backend/app/api/v1/chat.py
 backend/evals/refund_hitl_probe.py
@@ -352,17 +354,52 @@ Flow:
 
 ```text
 Customer asks for refund and provides email
--> graph looks up the matching order read-only
+-> graph looks up the matching order
+-> graph creates or reuses one pending refund request by idempotency key
 -> graph raises interrupt(payload)
 -> API streams an interrupt event to the caller
 -> reviewer approves/rejects
 -> caller resumes with Command(resume={...})
+-> graph records approved/rejected on the same refund request
 -> graph returns the final customer-facing message
 ```
 
-The refund gate does not process money. It proves the safer production pattern:
-the agent can prepare a proposed action, but a human must approve before any
-state-changing refund step exists.
+The refund gate does not process money. It records approval state for a proposed
+refund. This proves the safer production pattern: the agent can prepare a
+proposed action, but a human must approve before any payment/refund write step
+exists.
+
+## Idempotency
+
+Idempotency means repeating the same operation has the same effect as doing it
+once.
+
+For refunds, this matters because repeated events are normal:
+
+- the user double-clicks
+- the frontend retries after a timeout
+- the API request succeeds but the client loses the response
+- a worker crashes and retries
+- a webhook is delivered twice
+
+Without idempotency, a refund approval flow could accidentally create two refund
+records or, in a real payment system, issue money twice.
+
+AbhiMart uses a unique `idempotency_key` on `refund_requests`. The key is based
+on the customer email, order ID, and normalized refund reason. If the same
+refund request is prepared again, the app reuses the existing row.
+
+Important nuance:
+
+> Idempotency does not mean "nothing can ever happen twice." It means the same
+> logical request is recognized and handled once.
+
+When not to use this exact approach:
+
+- when the business allows multiple partial refunds for the same order
+- when the client should supply its own idempotency key
+- when the request reason is too vague to safely identify a logical operation
+- when the operation needs a stronger state machine and audit trail
 
 Local probe:
 

@@ -1060,6 +1060,11 @@ These appear in the source materials but won't be built. Abhi should know they e
   - `graph.py` pauses with `interrupt(payload)` before any refund write action.
   - `POST /v1/chat/resume` resumes the paused graph with reviewer approval or rejection.
   - `evals/refund_hitl_probe.py` verifies the pause/resume path without calling the LLM.
+- Added durable refund request records:
+  - `refund_requests` table tracks pending/approved/rejected review state.
+  - a unique idempotency key prevents the same logical refund request from
+    creating duplicate records when the graph resumes or a request is retried.
+  - this is still not a real payment refund; it is the approval/audit foundation.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth
@@ -1068,8 +1073,8 @@ These appear in the source materials but won't be built. Abhi should know they e
   - cite exact source filenames such as `[Source: return-policy.md]`
 - Important learning: the first return-policy failure was not retrieval. The agent retrieved/cited the right policy but synthesized it too permissively. This was diagnosed as a policy-reasoning/synthesis failure and fixed through targeted prompt changes plus better evaluator checks.
 - Next Stage 5 work:
-  - add durable refund request records and idempotency keys before any real write action
   - add focused evals for refund approval, rejection, missing order, and duplicate resume behavior
+  - add a real refund processing tool only after the approval record/state machine is tested
   - expose the approval flow cleanly in the frontend later
 
 **Decisions locked:**
