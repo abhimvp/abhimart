@@ -155,6 +155,9 @@ The first implementation should stay small and useful.
 The first implementation exports spans to the console. This keeps the learning
 loop simple: no Jaeger, Grafana, or external vendor is required yet.
 
+The second local implementation sends traces to Jaeger using OTLP. Jaeger gives
+us a browser UI for viewing trace waterfalls instead of reading raw JSON.
+
 FastAPI's low-level ASGI `send` and `receive` spans are disabled because SSE
 streaming emits many response-body events. We keep the main HTTP request span
 and the AbhiMart business spans so local traces stay readable.
@@ -167,6 +170,33 @@ Current spans include:
 - RAG retrieval
 - Postgres lookups
 - structured return-policy classification
+
+## Console Exporter vs Jaeger
+
+The console exporter is useful for proving that spans exist:
+
+```text
+AbhiMart -> OpenTelemetry SDK -> terminal JSON
+```
+
+Jaeger is useful for reading traces visually:
+
+```text
+AbhiMart -> OpenTelemetry SDK -> OTLP exporter -> Jaeger -> browser UI
+```
+
+In Jaeger, one chat request appears as a waterfall:
+
+```text
+POST /v1/chat
+  chat.agent_stream
+    agent.llm_node
+    rag.retrieve
+    agent.llm_node
+```
+
+This is how engineers usually inspect timing and nesting. The UI calculates
+durations and shows parent/child relationships automatically.
 
 Later, we can add metrics such as:
 
@@ -195,6 +225,7 @@ Enable local console tracing in `.env`:
 OTEL_ENABLED=true
 OTEL_SERVICE_NAME=abhimart-backend
 OTEL_ENVIRONMENT=local
+OTEL_EXPORTER=console
 ```
 
 Start the API:
@@ -224,6 +255,72 @@ If the console output becomes noisy, set this back to false:
 OTEL_ENABLED=false
 ```
 
+## Local Jaeger UI
+
+Install the OTLP exporter dependency from the backend directory:
+
+```bash
+cd backend
+uv add opentelemetry-exporter-otlp-proto-grpc
+```
+
+Start Jaeger from the repo root:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d jaeger
+```
+
+Configure `.env` for Jaeger:
+
+```env
+OTEL_ENABLED=true
+OTEL_EXPORTER=otlp
+OTEL_OTLP_ENDPOINT=http://localhost:4317
+OTEL_OTLP_INSECURE=true
+OTEL_SERVICE_NAME=abhimart-backend
+OTEL_ENVIRONMENT=local
+```
+
+Start the backend:
+
+```bash
+cd backend
+uv run uvicorn app.main:app --reload
+```
+
+Send a chat request:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"What warranty do laptops come with?","session_id":"jaeger-test-1"}'
+```
+
+Open Jaeger:
+
+```text
+http://localhost:16686
+```
+
+Search for service:
+
+```text
+abhimart-backend
+```
+
+Expected trace shape:
+
+```text
+POST /v1/chat
+  chat.agent_stream
+    agent.llm_node
+    rag.retrieve
+    agent.llm_node
+```
+
+Jaeger is local and uses transient in-memory storage here. If the container is
+restarted, old traces disappear. That is fine for local development.
+
 ## Questions To Ask Before Adding Observability
 
 When adding observability to any project, ask:
@@ -244,3 +341,5 @@ debug the system without becoming a privacy leak.
 - [OpenTelemetry: What is OpenTelemetry?](https://opentelemetry.io/docs/what-is-opentelemetry/)
 - [OpenTelemetry observability primer](https://opentelemetry.io/docs/concepts/observability-primer/)
 - [OpenTelemetry docs](https://opentelemetry.io/docs/)
+- [OpenTelemetry Python exporters](https://opentelemetry.io/docs/languages/python/exporters/)
+- [Jaeger getting started](https://www.jaegertracing.io/docs/latest/getting-started/)

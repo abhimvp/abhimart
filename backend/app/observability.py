@@ -1,7 +1,7 @@
 """OpenTelemetry setup for AbhiMart.
 
-This first pass intentionally exports spans to the console. That lets us learn
-the trace shape locally before adding Jaeger, Grafana Tempo, or a hosted vendor.
+The default exporter prints spans to the console. For visual local debugging,
+set OTEL_EXPORTER=otlp and send traces to Jaeger on localhost:4317.
 """
 
 import structlog
@@ -16,6 +16,29 @@ from app.config import Settings
 
 logger = structlog.get_logger()
 _configured = False
+
+
+def _build_span_exporter(settings: Settings):
+    """Build the configured span exporter."""
+    exporter = settings.OTEL_EXPORTER.lower()
+
+    if exporter == "console":
+        return ConsoleSpanExporter()
+
+    if exporter == "otlp":
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import (
+            OTLPSpanExporter,
+        )
+
+        return OTLPSpanExporter(
+            endpoint=settings.OTEL_OTLP_ENDPOINT,
+            insecure=settings.OTEL_OTLP_INSECURE,
+        )
+
+    raise ValueError(
+        "Unsupported OTEL_EXPORTER. Expected 'console' or 'otlp', "
+        f"got {settings.OTEL_EXPORTER!r}."
+    )
 
 
 def setup_observability(app: FastAPI, settings: Settings) -> None:
@@ -37,7 +60,7 @@ def setup_observability(app: FastAPI, settings: Settings) -> None:
         }
     )
     provider = TracerProvider(resource=resource)
-    provider.add_span_processor(BatchSpanProcessor(ConsoleSpanExporter()))
+    provider.add_span_processor(BatchSpanProcessor(_build_span_exporter(settings)))
     trace.set_tracer_provider(provider)
 
     FastAPIInstrumentor.instrument_app(
@@ -53,6 +76,7 @@ def setup_observability(app: FastAPI, settings: Settings) -> None:
         "OpenTelemetry enabled",
         service_name=settings.OTEL_SERVICE_NAME,
         environment=settings.OTEL_ENVIRONMENT,
+        exporter=settings.OTEL_EXPORTER,
     )
 
 

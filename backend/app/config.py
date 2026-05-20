@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     OTEL_ENABLED: bool = False
     OTEL_SERVICE_NAME: str = "abhimart-backend"
     OTEL_ENVIRONMENT: str = "local"
+    OTEL_EXPORTER: str = "console"
+    OTEL_OTLP_ENDPOINT: str = "http://localhost:4317"
+    OTEL_OTLP_INSECURE: bool = True
 
 
 @lru_cache
