@@ -31,6 +31,7 @@ from time import perf_counter
 import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
+from langgraph.types import Command
 from pydantic import BaseModel
 
 from app.observability import get_tracer
@@ -48,6 +49,12 @@ logger = structlog.get_logger()
 class ChatRequest(BaseModel):
     message: str
     session_id: str = "default"
+
+
+class ChatResumeRequest(BaseModel):
+    session_id: str
+    approved: bool
+    reviewer_note: str | None = None
 
 
 def extract_direct_llm_text(event: dict) -> str:
@@ -71,24 +78,61 @@ def extract_direct_llm_text(event: dict) -> str:
     return content if isinstance(content, str) else ""
 
 
-async def event_stream(graph, message: str, session_id: str):
+def _serialize_interrupt(value):
+    if hasattr(value, "value"):
+        return _serialize_interrupt(value.value)
+    if isinstance(value, dict):
+        return {key: _serialize_interrupt(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_serialize_interrupt(item) for item in value]
+    return value
+
+
+def extract_interrupt_payload(event: dict):
+    data = event.get("data") or {}
+    candidates = []
+    if isinstance(data, dict):
+        candidates.extend([data.get("chunk"), data.get("output")])
+
+    for candidate in candidates:
+        if isinstance(candidate, dict) and "__interrupt__" in candidate:
+            return _serialize_interrupt(candidate["__interrupt__"])
+    return None
+
+
+async def event_stream(graph, graph_input, session_id: str, message_for_metrics: str):
     config = {"configurable": {"thread_id": session_id}}
-    inputs = {"messages": [{"role": "user", "content": message}]}
     start = perf_counter()
     chunk_count = 0
+    interrupt_sent = False
 
     with tracer.start_as_current_span("chat.agent_stream") as span:
         span.set_attribute("abhimart.session_id", session_id)
-        span.set_attribute("abhimart.message_length", len(message))
+        span.set_attribute("abhimart.message_length", len(message_for_metrics))
 
         logger.info(
             "chat_stream_started",
             session_id=session_id,
-            message_length=len(message),
+            message_length=len(message_for_metrics),
         )
 
         try:
-            async for event in graph.astream_events(inputs, config=config, version="v2"):
+            async for event in graph.astream_events(
+                graph_input,
+                config=config,
+                version="v2",
+            ):
+                interrupt_payload = extract_interrupt_payload(event)
+                if interrupt_payload and not interrupt_sent:
+                    interrupt_sent = True
+                    chunk_count += 1
+                    yield (
+                        "data: "
+                        f"{json.dumps({'type': 'interrupt', 'interrupt': interrupt_payload})}"
+                        "\n\n"
+                    )
+                    continue
+
                 direct_text = extract_direct_llm_text(event)
                 if direct_text and chunk_count == 0:
                     chunk_count += 1
@@ -143,6 +187,7 @@ async def event_stream(graph, message: str, session_id: str):
 @router.post("")
 async def chat(request: ChatRequest, req: Request):
     graph = req.app.state.graph
+    inputs = {"messages": [{"role": "user", "content": request.message}]}
     with tracer.start_as_current_span("chat.request") as span:
         span.set_attribute("abhimart.session_id", request.session_id)
         span.set_attribute("abhimart.message_length", len(request.message))
@@ -153,14 +198,45 @@ async def chat(request: ChatRequest, req: Request):
         )
         record_chat_request()
         return StreamingResponse(
-            event_stream(graph, request.message, request.session_id),
+            event_stream(graph, inputs, request.session_id, request.message),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "X-Accel-Buffering": "no",
             },
         )
-    
+
+
+@router.post("/resume")
+async def resume_chat(request: ChatResumeRequest, req: Request):
+    graph = req.app.state.graph
+    resume_value = {
+        "approved": request.approved,
+        "reviewer_note": request.reviewer_note or "",
+    }
+    with tracer.start_as_current_span("chat.resume") as span:
+        span.set_attribute("abhimart.session_id", request.session_id)
+        span.set_attribute("abhimart.approved", request.approved)
+        logger.info(
+            "chat_resume_received",
+            session_id=request.session_id,
+            approved=request.approved,
+        )
+        return StreamingResponse(
+            event_stream(
+                graph,
+                Command(resume=resume_value),
+                request.session_id,
+                "resume",
+            ),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+
 @router.get("/history/{session_id}")
 async def get_history(session_id: str, req: Request):
     graph = req.app.state.graph

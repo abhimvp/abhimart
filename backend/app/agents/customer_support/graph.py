@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, START, MessagesState
 from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.types import interrupt
 
 from app.config import get_settings
 from app.agents.customer_support.tools import (
@@ -16,6 +17,7 @@ from app.agents.customer_support.tools import (
     assess_return_eligibility,
 )
 from app.agents.customer_support.guardrails import check_input_guardrails
+from app.agents.customer_support.refund import prepare_refund_review
 from app.observability import get_tracer
 
 settings = get_settings()
@@ -36,7 +38,7 @@ llm_with_tools = llm.bind_tools(tools)
 SYSTEM_PROMPT = """You are a helpful customer support agent for AbhiMart,
 an e-commerce store selling electronics, appliances, fitness gear, and books.
 
-You have access to three tools:
+You have access to four tools:
 - lookup_order: fetch a customer's order history (requires their email)
 - get_product_info: fetch product details from the catalog
 - search_faq: search AbhiMart's knowledge base for policies, FAQs, and shipping info
@@ -71,6 +73,49 @@ async def llm_node(state: MessagesState) -> dict:
                 message_length=len(latest_content),
             )
             return {"messages": [AIMessage(content=guardrail.response)]}
+
+        refund_review = await prepare_refund_review(latest_content)
+        if refund_review.response:
+            return {"messages": [AIMessage(content=refund_review.response)]}
+
+        if refund_review.should_interrupt and refund_review.payload:
+            logger.info(
+                "refund_review_interrupt_requested",
+                customer_email_domain=refund_review.payload.get(
+                    "customer_email_domain"
+                ),
+                order_status=refund_review.payload.get("order_status"),
+            )
+            human_decision = interrupt(refund_review.payload)
+
+            approved = (
+                bool(human_decision.get("approved"))
+                if isinstance(human_decision, dict)
+                else False
+            )
+            reviewer_note = (
+                human_decision.get("reviewer_note", "")
+                if isinstance(human_decision, dict)
+                else ""
+            )
+            order_preview = refund_review.payload["order_id_preview"]
+
+            if approved:
+                response = (
+                    "The refund request has been approved for the next support "
+                    f"processing step for Order #{order_preview}. No automatic "
+                    "payment action was performed by the AI agent."
+                )
+            else:
+                response = (
+                    "The refund request was not approved for processing by the "
+                    f"human reviewer for Order #{order_preview}."
+                )
+
+            if reviewer_note:
+                response = f"{response} Reviewer note: {reviewer_note}"
+
+            return {"messages": [AIMessage(content=response)]}
 
     # Prepend system prompt on every call
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + state["messages"]

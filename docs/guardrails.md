@@ -181,6 +181,35 @@ HITL is useful when:
 - risk is high
 - the agent lacks enough confidence
 
+## Interrupt And Resume
+
+LangGraph implements HITL with two important ideas:
+
+- `interrupt(payload)`: pause the graph and return a review payload to the
+  caller
+- `Command(resume=value)`: continue the same paused graph later with the
+  human's decision
+
+The checkpointer and `thread_id` matter here. The checkpointer stores the paused
+graph state, and the `thread_id` tells LangGraph which paused conversation to
+resume.
+
+One important failure mode:
+
+> Code before `interrupt()` runs again when the graph resumes.
+
+That means code before the interrupt must be safe to repeat. In AbhiMart, the
+refund review step only does a read-only order lookup before pausing. It does
+not create a refund, charge money, send email, or write an audit record before
+approval.
+
+When not to use HITL:
+
+- simple read-only questions
+- low-risk product/catalog lookups
+- flows where a deterministic rule can safely decide the outcome
+- cases where the human reviewer has no useful context or authority
+
 ## Input, Tool, And Output Guardrails
 
 Guardrails can happen at different points.
@@ -306,6 +335,76 @@ Why deterministic first?
 
 This is not the final guardrail system. It is the first safety boundary.
 
+## Refund Approval Gate
+
+After the initial input guardrails, AbhiMart adds a small refund approval gate.
+
+Files:
+
+```text
+backend/app/agents/customer_support/refund.py
+backend/app/agents/customer_support/graph.py
+backend/app/api/v1/chat.py
+backend/evals/refund_hitl_probe.py
+```
+
+Flow:
+
+```text
+Customer asks for refund and provides email
+-> graph looks up the matching order read-only
+-> graph raises interrupt(payload)
+-> API streams an interrupt event to the caller
+-> reviewer approves/rejects
+-> caller resumes with Command(resume={...})
+-> graph returns the final customer-facing message
+```
+
+The refund gate does not process money. It proves the safer production pattern:
+the agent can prepare a proposed action, but a human must approve before any
+state-changing refund step exists.
+
+Local probe:
+
+```bash
+uv run python evals/refund_hitl_probe.py --approve
+```
+
+Manual API test:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message":"My email is rohit@example.com. Please start a refund for my MacBook order.","session_id":"refund-demo-1"}'
+```
+
+Resume the paused run:
+
+```bash
+curl -N -X POST http://127.0.0.1:8000/v1/chat/resume \
+  -H "Content-Type: application/json" \
+  -d '{"session_id":"refund-demo-1","approved":true,"reviewer_note":"Approved for demo"}'
+```
+
+What this protects:
+
+- the model cannot honestly claim it processed a refund
+- refund review context is explicit
+- the same `session_id` resumes the same paused graph
+- no tool writes or payment changes happen before approval
+
+What could still break:
+
+- weak product matching could pick the wrong order
+- a reviewer could approve the wrong request
+- a future real refund tool could be added without idempotency
+- UI code might ignore the interrupt event
+- logs or traces could accidentally include too much review payload
+
+The next production hardening step would be storing refund requests in a real
+table with statuses such as `pending_review`, `approved`, `rejected`, and
+`processed`, plus an audit trail.
+
 ## Interview Framing
 
 Good explanation:
@@ -314,6 +413,13 @@ Good explanation:
 > actions. The goal was to protect customer data and prevent tool misuse. I
 > treated PII, prompt injection, cross-customer access, and human approval as
 > testable behaviors, not just prompt instructions.
+
+Refund/HITL explanation:
+
+> For refund requests, I separated proposal from execution. The agent can gather
+> order context and pause the LangGraph run with an interrupt. A human reviewer
+> resumes the same thread with an approval or rejection. This avoids letting the
+> LLM directly perform a sensitive write action.
 
 ## Questions To Ask When Designing Guardrails
 

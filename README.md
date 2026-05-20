@@ -27,17 +27,18 @@ approval.
 | Stage 1 | LangGraph agent + streaming SSE chat API | Complete |
 | Stage 2 | Tools (order lookup, product info) + Postgres-backed memory | Complete |
 | Stage 3 | RAG pipeline - pgvector + Gemini embeddings + `search_faq` tool | Complete |
-| Stage 4 | Local eval harness, LangSmith experiments, and LLM-as-judge checks running; observability next | In progress |
-| Stage 5 | Guardrails + multi-agent | Planned |
+| Stage 4 | Eval harness, LangSmith experiments, LLM-as-judge checks, OpenTelemetry, Jaeger, logs, and metrics | Complete |
+| Stage 5 | Guardrails, refund approval gate, and human-in-the-loop write-action safety | In progress |
 | Stage 6 | React frontend + production deployment | Planned |
 
 ## Stack
 
 Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x async, asyncpg, Postgres 17
 with pgvector, Alembic, structlog, Docker Compose, uv, LangGraph, LangChain,
-Google Gemini, and LangSmith.
+Google Gemini, LangSmith, OpenTelemetry, Jaeger, and Prometheus-compatible
+metrics.
 
-Coming later: Redis, React 19, TypeScript, OpenTelemetry, AWS.
+Coming later: Redis, React 19, TypeScript, and AWS.
 
 ## Project structure
 

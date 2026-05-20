@@ -1055,6 +1055,11 @@ These appear in the source materials but won't be built. Abhi should know they e
 - Added first deterministic input guardrail in
   `app/agents/customer_support/guardrails.py` and wired it before the LLM/tool
   loop.
+- Added refund human-in-the-loop approval gate:
+  - `app/agents/customer_support/refund.py` prepares a read-only refund review payload.
+  - `graph.py` pauses with `interrupt(payload)` before any refund write action.
+  - `POST /v1/chat/resume` resumes the paused graph with reviewer approval or rejection.
+  - `evals/refund_hitl_probe.py` verifies the pause/resume path without calling the LLM.
 - Improved the customer-support system prompt in `app/agents/customer_support/graph.py` so policy answers:
   - use `search_faq`
   - treat retrieved policy text as source of truth
@@ -1062,11 +1067,10 @@ These appear in the source materials but won't be built. Abhi should know they e
   - explicitly handle opened/used/installed/assembled/damaged/missing-packaging conditions
   - cite exact source filenames such as `[Source: return-policy.md]`
 - Important learning: the first return-policy failure was not retrieval. The agent retrieved/cited the right policy but synthesized it too permissively. This was diagnosed as a policy-reasoning/synthesis failure and fixed through targeted prompt changes plus better evaluator checks.
-- Next Stage 4 work:
-  - compare prompt/model versions over time in LangSmith
-  - optionally wire the LLM-as-judge evaluator into LangSmith experiment runs
-  - use LangSmith experiment comparisons to track future prompt/model/tool changes
-  - begin observability work beyond LangSmith, especially OpenTelemetry/logs/metrics/traces
+- Next Stage 5 work:
+  - add durable refund request records and idempotency keys before any real write action
+  - add focused evals for refund approval, rejection, missing order, and duplicate resume behavior
+  - expose the approval flow cleanly in the frontend later
 
 **Decisions locked:**
 
