@@ -19,6 +19,10 @@ See [Guardrails Notes](docs/guardrails.md) for Stage 5 safety concepts such as
 PII, prompt injection, tool misuse, write actions, and human-in-the-loop
 approval.
 
+See [RAG And Enterprise Document Intelligence Notes](docs/rag_document_intelligence.md)
+for deeper RAG concepts such as rerankers, question parsing, expert
+dictionaries, deterministic dispatch, corpus indexes, and auditability.
+
 See [Interview Prep Guide](docs/AbhiMart_Interview_Prep_Guide.md) for the
 end-to-end explanation of what has been built so far, why each concept exists,
 how AbhiMart uses it, and how to discuss the project honestly in interviews.
