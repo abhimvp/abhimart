@@ -31,6 +31,10 @@ See [EPAM Python GenAI Interview Playbook](docs/AbhiMart_EPAM_Python_GenAI_Inter
 for a focused recruiter/interviewer storytelling guide, practice scripts,
 trade-offs, failure modes, and honest project positioning.
 
+See [Order Preparation And Inventory Conflict Plan](docs/order_preparation_inventory_plan.md)
+for the proposed Stage 7 design covering custom exceptions, insufficient-stock
+handling, race conditions, and simulated order preparation.
+
 ## Status
 
 | Stage | Description | Status |
@@ -42,6 +46,7 @@ trade-offs, failure modes, and honest project positioning.
 | Stage 4 | Eval harness, LangSmith experiments, LLM-as-judge checks, OpenTelemetry, Jaeger, logs, and metrics | Complete |
 | Stage 5 | Guardrails, refund approval gate, and human-in-the-loop write-action safety | Complete |
 | Stage 6 | React frontend foundation + production deployment | Frontend foundation in progress; deployment planned |
+| Stage 7 | Simulated order preparation with inventory conflict handling | Proposed |
 
 ## Stack
 

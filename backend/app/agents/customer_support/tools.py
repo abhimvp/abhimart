@@ -14,11 +14,23 @@ from app.models.product import Product
 from app.models.user import User
 from app.config import get_settings
 from app.agents.customer_support.policy import classify_return_eligibility
+from app.exceptions import (
+    CustomerNotFoundError,
+    InsufficientStockError,
+    InvalidOrderQuantityError,
+    ProductNotFoundError,
+)
 from app.observability import get_tracer
 from app.observability_metrics import (
     record_rag_retrieval,
     record_tool_call,
     record_tool_duration,
+)
+from app.services.order_preparation import (
+    check_inventory_for_order as check_inventory_for_order_service,
+)
+from app.services.order_preparation import (
+    prepare_simulated_order as prepare_simulated_order_service,
 )
 import asyncio
 import json
@@ -34,6 +46,31 @@ def _email_domain(email: str) -> str:
     if "@" not in email:
         return "unknown"
     return email.rsplit("@", 1)[1].lower()
+
+
+def _error_payload(code: str, message: str, **details) -> str:
+    return json.dumps(
+        {
+            "ok": False,
+            "code": code,
+            "message": message,
+            **details,
+        },
+        ensure_ascii=False,
+    )
+
+
+def _stock_error_payload(error: InsufficientStockError) -> str:
+    return _error_payload(
+        "INSUFFICIENT_STOCK",
+        (
+            f"Only {error.available_quantity} units of {error.product_name} "
+            f"are available."
+        ),
+        product_name=error.product_name,
+        requested_quantity=error.requested_quantity,
+        available_quantity=error.available_quantity,
+    )
 
 
 @tool
@@ -164,6 +201,192 @@ async def get_product_info(product_name: str) -> str:
                     f"  Description: {p.description[:150]}..."
                 )
             return "\n\n".join(lines)
+
+
+@tool
+async def check_inventory_for_order(product_name: str, quantity: int) -> str:
+    """Check whether a requested product quantity is currently available.
+
+    Use this when the customer says they want to buy, order, or purchase a
+    quantity of a product. This tool is read-only: it does not reserve stock,
+    create an order, charge payment, or require the customer's email.
+
+    If there is not enough stock, tell the customer how many units are available
+    and ask whether they want to continue with the available quantity.
+
+    Args:
+        product_name: Product name or partial name to check.
+        quantity: Quantity the customer wants to order.
+    """
+    with tracer.start_as_current_span("tool.check_inventory_for_order") as span:
+        start = perf_counter()
+        record_tool_call("check_inventory_for_order")
+        span.set_attribute("abhimart.tool", "check_inventory_for_order")
+        span.set_attribute("abhimart.product_query_length", len(product_name))
+        span.set_attribute("abhimart.requested_quantity", quantity)
+        logger.info(
+            "tool_check_inventory_for_order_started",
+            product_query_length=len(product_name),
+            requested_quantity=quantity,
+        )
+
+        try:
+            result = await check_inventory_for_order_service(
+                product_name=product_name,
+                quantity=quantity,
+            )
+        except InvalidOrderQuantityError as exc:
+            status = "invalid_quantity"
+            payload = _error_payload(
+                "INVALID_ORDER_QUANTITY",
+                "Order quantity must be a positive whole number.",
+                requested_quantity=exc.quantity,
+            )
+        except ProductNotFoundError as exc:
+            status = "product_not_found"
+            payload = _error_payload(
+                "PRODUCT_NOT_FOUND",
+                f"No active product found matching '{exc.product_name}'.",
+                product_name=exc.product_name,
+            )
+        except InsufficientStockError as exc:
+            status = "insufficient_stock"
+            payload = _stock_error_payload(exc)
+        else:
+            status = "success"
+            payload = json.dumps(
+                {
+                    "ok": True,
+                    "code": "IN_STOCK",
+                    "product_name": result.product_name,
+                    "requested_quantity": result.requested_quantity,
+                    "available_quantity": result.available_quantity,
+                    "unit_price": str(result.unit_price),
+                    "message": (
+                        "Requested quantity is currently available. Ask for "
+                        "the customer's email and explicit confirmation before "
+                        "preparing a simulated order."
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        duration_ms = round((perf_counter() - start) * 1000, 2)
+        record_tool_duration(
+            "check_inventory_for_order",
+            duration_ms,
+            status=status,
+        )
+        logger.info(
+            "tool_check_inventory_for_order_completed",
+            duration_ms=duration_ms,
+            status=status,
+            requested_quantity=quantity,
+        )
+        return payload
+
+
+@tool
+async def prepare_simulated_order(
+    product_name: str,
+    quantity: int,
+    customer_email: str,
+) -> str:
+    """Prepare a simulated pending order after explicit customer confirmation.
+
+    Use this only after:
+    - the customer has provided their AbhiMart account email, and
+    - the customer explicitly confirmed they want to prepare the simulated order.
+
+    This tool re-checks stock, decrements inventory if available, and creates a
+    pending simulated order. It does not charge payment and does not create a
+    real shipment.
+
+    Args:
+        product_name: Product name or partial name to order.
+        quantity: Confirmed quantity to prepare.
+        customer_email: Customer's AbhiMart account email.
+    """
+    with tracer.start_as_current_span("tool.prepare_simulated_order") as span:
+        start = perf_counter()
+        email_domain = _email_domain(customer_email)
+        record_tool_call("prepare_simulated_order")
+        span.set_attribute("abhimart.tool", "prepare_simulated_order")
+        span.set_attribute("abhimart.product_query_length", len(product_name))
+        span.set_attribute("abhimart.requested_quantity", quantity)
+        span.set_attribute("abhimart.email_domain", email_domain)
+        logger.info(
+            "tool_prepare_simulated_order_started",
+            email_domain=email_domain,
+            product_query_length=len(product_name),
+            requested_quantity=quantity,
+        )
+
+        try:
+            result = await prepare_simulated_order_service(
+                product_name=product_name,
+                quantity=quantity,
+                customer_email=customer_email,
+            )
+        except InvalidOrderQuantityError as exc:
+            status = "invalid_quantity"
+            payload = _error_payload(
+                "INVALID_ORDER_QUANTITY",
+                "Order quantity must be a positive whole number.",
+                requested_quantity=exc.quantity,
+            )
+        except ProductNotFoundError as exc:
+            status = "product_not_found"
+            payload = _error_payload(
+                "PRODUCT_NOT_FOUND",
+                f"No active product found matching '{exc.product_name}'.",
+                product_name=exc.product_name,
+            )
+        except CustomerNotFoundError as exc:
+            status = "customer_not_found"
+            payload = _error_payload(
+                "CUSTOMER_NOT_FOUND",
+                "No AbhiMart customer account was found for that email.",
+                email_domain=_email_domain(exc.email),
+            )
+        except InsufficientStockError as exc:
+            status = "insufficient_stock"
+            payload = _stock_error_payload(exc)
+        else:
+            status = "success"
+            payload = json.dumps(
+                {
+                    "ok": True,
+                    "code": "SIMULATED_ORDER_PREPARED",
+                    "status": result.status,
+                    "order_id_preview": result.order_id_preview,
+                    "product_name": result.product_name,
+                    "quantity": result.quantity,
+                    "unit_price": str(result.unit_price),
+                    "total_amount": str(result.total_amount),
+                    "remaining_stock": result.remaining_stock,
+                    "message": (
+                        "Simulated pending order created. No payment was "
+                        "charged and no real shipment was created."
+                    ),
+                },
+                ensure_ascii=False,
+            )
+
+        duration_ms = round((perf_counter() - start) * 1000, 2)
+        record_tool_duration(
+            "prepare_simulated_order",
+            duration_ms,
+            status=status,
+        )
+        logger.info(
+            "tool_prepare_simulated_order_completed",
+            duration_ms=duration_ms,
+            email_domain=email_domain,
+            status=status,
+            requested_quantity=quantity,
+        )
+        return payload
 
 
 # --- RAG setup ---

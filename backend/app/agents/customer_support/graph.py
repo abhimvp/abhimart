@@ -15,6 +15,8 @@ from app.agents.customer_support.tools import (
     get_product_info,
     search_faq,
     assess_return_eligibility,
+    check_inventory_for_order,
+    prepare_simulated_order,
 )
 from app.agents.customer_support.guardrails import check_input_guardrails
 from app.agents.customer_support.refund import (
@@ -30,7 +32,14 @@ tracer = get_tracer(__name__)
 logger = structlog.get_logger()
 
 # --- Tools ---
-tools = [lookup_order, get_product_info, search_faq, assess_return_eligibility]
+tools = [
+    lookup_order,
+    get_product_info,
+    search_faq,
+    assess_return_eligibility,
+    check_inventory_for_order,
+    prepare_simulated_order,
+]
 
 # --- Model bound with tools ---
 # bind_tools tells the LLM what tools exist and their schemas.
@@ -42,14 +51,23 @@ llm_with_tools = llm.bind_tools(tools)
 SYSTEM_PROMPT = """You are a helpful customer support agent for AbhiMart,
 an e-commerce store selling electronics, appliances, fitness gear, and books.
 
-You have access to four tools:
+You have access to six tools:
 - lookup_order: fetch a customer's order history (requires their email)
 - get_product_info: fetch product details from the catalog
 - search_faq: search AbhiMart's knowledge base for policies, FAQs, and shipping info
 - assess_return_eligibility: retrieve return policy and classify return eligibility
+- check_inventory_for_order: check whether a requested order quantity is currently available
+- prepare_simulated_order: create a simulated pending order after email and explicit confirmation
 
 Always be polite and concise. If a customer asks about their orders,
 ask for their email address first before calling lookup_order.
+When a customer asks to buy, order, or purchase a quantity of a product:
+- Use check_inventory_for_order first. This public inventory check does not require email.
+- If requested quantity is not available, mention the available quantity and ask whether they want to continue with that quantity.
+- Before calling prepare_simulated_order, require the customer's AbhiMart account email and explicit confirmation.
+- Never call prepare_simulated_order just because the customer asked about availability.
+- Never say a real payment was charged or a real shipment was created. This project only prepares simulated pending orders.
+When prepare_simulated_order reports stock changed or insufficient stock, explain that the order could not be prepared and mention the updated available quantity.
 When answering policy questions:
 - Use search_faq before answering.
 - For return/refund eligibility questions, use assess_return_eligibility before answering.
