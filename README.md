@@ -27,6 +27,10 @@ See [Interview Prep Guide](docs/AbhiMart_Interview_Prep_Guide.md) for the
 end-to-end explanation of what has been built so far, why each concept exists,
 how AbhiMart uses it, and how to discuss the project honestly in interviews.
 
+See [EPAM Python GenAI Interview Playbook](docs/AbhiMart_EPAM_Python_GenAI_Interview_Playbook.md)
+for a focused recruiter/interviewer storytelling guide, practice scripts,
+trade-offs, failure modes, and honest project positioning.
+
 ## Status
 
 | Stage | Description | Status |
@@ -37,16 +41,16 @@ how AbhiMart uses it, and how to discuss the project honestly in interviews.
 | Stage 3 | RAG pipeline - pgvector + Gemini embeddings + `search_faq` tool | Complete |
 | Stage 4 | Eval harness, LangSmith experiments, LLM-as-judge checks, OpenTelemetry, Jaeger, logs, and metrics | Complete |
 | Stage 5 | Guardrails, refund approval gate, and human-in-the-loop write-action safety | Complete |
-| Stage 6 | React frontend + production deployment | Planned |
+| Stage 6 | React frontend foundation + production deployment | Frontend foundation in progress; deployment planned |
 
 ## Stack
 
 Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x async, asyncpg, Postgres 17
 with pgvector, Alembic, structlog, Docker Compose, uv, LangGraph, LangChain,
-Google Gemini, LangSmith, OpenTelemetry, Jaeger, and Prometheus-compatible
-metrics.
+Google Gemini, LangSmith, OpenTelemetry, Jaeger, Prometheus-compatible metrics,
+React, TypeScript, and Vite.
 
-Coming later: Redis, React 19, TypeScript, and AWS.
+Coming later: Redis and AWS deployment.
 
 ## Project structure
 
