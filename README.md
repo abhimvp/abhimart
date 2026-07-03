@@ -19,6 +19,10 @@ See [Guardrails Notes](docs/guardrails.md) for Stage 5 safety concepts such as
 PII, prompt injection, tool misuse, write actions, and human-in-the-loop
 approval.
 
+See [Guardrails And LangChain Gap Analysis](docs/guardrails_langchain_gap_analysis.md)
+for how AbhiMart's custom guardrails compare with LangChain's guardrails docs
+and what remains to harden.
+
 See [RAG And Enterprise Document Intelligence Notes](docs/rag_document_intelligence.md)
 for deeper RAG concepts such as rerankers, question parsing, expert
 dictionaries, deterministic dispatch, corpus indexes, and auditability.
@@ -31,9 +35,17 @@ See [EPAM Python GenAI Interview Playbook](docs/AbhiMart_EPAM_Python_GenAI_Inter
 for a focused recruiter/interviewer storytelling guide, practice scripts,
 trade-offs, failure modes, and honest project positioning.
 
+See [Advanced Strategy Use-Case Map](docs/AbhiMart_Advanced_Strategy_Use_Case_Map.md)
+for scenario-based explanations of future strategies such as metadata
+filtering, hybrid search, reranking, grounding checks, CI eval gates, auth, and
+operational hardening.
+
 See [Order Preparation And Inventory Conflict Plan](docs/order_preparation_inventory_plan.md)
 for the proposed Stage 7 design covering custom exceptions, insufficient-stock
 handling, race conditions, and simulated order preparation.
+
+See [Stage 7 Order Preparation Evals Plan](docs/stage7_order_preparation_evals.md)
+for the staged eval strategy before adding the order-preparation eval dataset.
 
 ## Status
 

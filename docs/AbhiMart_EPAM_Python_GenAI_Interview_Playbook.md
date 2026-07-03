@@ -760,6 +760,9 @@ Say instead:
 These are good next-stage ideas, especially if the interviewer asks how you
 would scale or improve it.
 
+For a scenario-by-scenario reference, see
+[AbhiMart Advanced Strategy Use-Case Map](AbhiMart_Advanced_Strategy_Use_Case_Map.md).
+
 ### Bigger data and better RAG
 
 - Add more products, users, orders, policies, and support articles.
