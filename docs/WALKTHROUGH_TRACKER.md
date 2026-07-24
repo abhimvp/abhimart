@@ -143,8 +143,16 @@ Known weak points (state before interviewer finds them):
 - Deliberately did NOT reshuffle files to match the tutorial's
   nodes.py/state.py/tools.py layout — existing structure is equivalent/cleaner.
 
+## AbhiMart v2 (from-scratch mastery build)
+- Decided to rebuild AbhiMart from scratch as a stage-gated learning project,
+  two-track (this app stays the working demo). Full plan +
+  reference-PDF mapping in [abhimart-v2/BLUEPRINT.md](abhimart-v2/BLUEPRINT.md);
+  status in [abhimart-v2/PROGRESS_TRACKER.md](abhimart-v2/PROGRESS_TRACKER.md).
+
 ## Change log
 
 - 2026-07-24: Tracker created. Phase 0 + Phase 3 complete.
+- 2026-07-24: Drafted AbhiMart v2 blueprint (14 stages) + tracker from 3 core
+  reference PDFs.
 - 2026-07-24: LangGraph Platform deploy alignment — added langgraph.json,
   made checkpointer optional, added make_graph factory.
