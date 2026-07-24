@@ -19,12 +19,7 @@ from app.config import get_settings
 from app.database import engine
 from app.api.v1.products import router as products_router
 from app.api.v1.chat import router as chat_router
-from app.observability import setup_observability
 import os
-
-# Must be set in os.environ — LangSmith SDK reads these directly,
-# not from our settings object.
-from app.config import get_settings
 
 logger = structlog.get_logger()
 
@@ -69,7 +64,6 @@ app = FastAPI(
     description="AI customer support agent for AbhiMart e-commerce",
     lifespan=lifespan,
 )
-setup_observability(app, _settings)
 
 # CORS — permissive for local dev. We'll lock this down for production.
 app.add_middleware(

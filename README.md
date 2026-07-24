@@ -13,7 +13,9 @@ dataset, LangSmith experiment workflow, and Stage 4 evaluation learning guide.
 
 See [Observability Notes](docs/observability.md) for the project explanation of
 OpenTelemetry, traces/spans/metrics/logs, and how observability fits alongside
-LangSmith.
+LangSmith. Note: the OpenTelemetry/Jaeger/Prometheus instrumentation was removed
+from the code for now (kept as conceptual notes) — structured logging via
+structlog remains.
 
 See [Guardrails Notes](docs/guardrails.md) for Stage 5 safety concepts such as
 PII, prompt injection, tool misuse, write actions, and human-in-the-loop
@@ -55,7 +57,7 @@ for the staged eval strategy before adding the order-preparation eval dataset.
 | Stage 1 | LangGraph agent + streaming SSE chat API | Complete |
 | Stage 2 | Tools (order lookup, product info) + Postgres-backed memory | Complete |
 | Stage 3 | RAG pipeline - pgvector + Gemini embeddings + `search_faq` tool | Complete |
-| Stage 4 | Eval harness, LangSmith experiments, LLM-as-judge checks, OpenTelemetry, Jaeger, logs, and metrics | Complete |
+| Stage 4 | Eval harness, LangSmith experiments, LLM-as-judge checks, structured logging | Complete |
 | Stage 5 | Guardrails, refund approval gate, and human-in-the-loop write-action safety | Complete |
 | Stage 6 | React frontend foundation + production deployment | Frontend foundation in progress; deployment planned |
 | Stage 7 | Simulated order preparation with inventory conflict handling | Proposed |
@@ -64,8 +66,7 @@ for the staged eval strategy before adding the order-preparation eval dataset.
 
 Python 3.12, FastAPI, Pydantic v2, SQLAlchemy 2.x async, asyncpg, Postgres 17
 with pgvector, Alembic, structlog, Docker Compose, uv, LangGraph, LangChain,
-Google Gemini, LangSmith, OpenTelemetry, Jaeger, Prometheus-compatible metrics,
-React, TypeScript, and Vite.
+Google Gemini, LangSmith, React, TypeScript, and Vite.
 
 Coming later: Redis and AWS deployment.
 

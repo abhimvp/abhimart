@@ -24,11 +24,9 @@ from app.agents.customer_support.refund import (
     prepare_refund_review,
     process_approved_refund,
 )
-from app.observability import get_tracer
 
 settings = get_settings()
 os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
-tracer = get_tracer(__name__)
 logger = structlog.get_logger()
 
 # --- Tools ---
@@ -130,9 +128,7 @@ async def llm_node(state: MessagesState) -> dict:
                 )
                 process_result = (
                     await process_approved_refund(
-                        refund_request_id=refund_review.payload[
-                            "refund_request_id"
-                        ],
+                        refund_request_id=refund_review.payload["refund_request_id"],
                     )
                     if review_result["status"] == "approved"
                     else review_result
@@ -172,15 +168,20 @@ async def llm_node(state: MessagesState) -> dict:
 
     # Prepend system prompt on every call
     messages = [{"role": "system", "content": SYSTEM_PROMPT}] + state["messages"]
-    with tracer.start_as_current_span("agent.llm_node") as span:
-        span.set_attribute("abhimart.agent", "customer_support")
-        span.set_attribute("abhimart.message_count", len(messages))
-        response = await llm_with_tools.ainvoke(messages)
+    response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
 
 # --- Graph factory ---
-def build_graph(checkpointer):
+def build_graph(checkpointer=None):
+    """Build and compile the customer-support graph.
+
+    Pass an explicit ``checkpointer`` for the self-hosted FastAPI path (see
+    ``app.main`` lifespan), which wires an ``AsyncPostgresSaver`` for durable
+    conversation memory. Leave it as ``None`` when the runtime supplies its own
+    persistence (e.g. LangGraph Platform), in which case we compile without a
+    checkpointer and let the platform attach one.
+    """
     graph = StateGraph(MessagesState)
 
     graph.add_node("llm", llm_node)
@@ -197,4 +198,18 @@ def build_graph(checkpointer):
     # so the LLM can see the tool result and respond
     graph.add_edge("tools", "llm")
 
-    return graph.compile(checkpointer=checkpointer)
+    if checkpointer is not None:
+        return graph.compile(checkpointer=checkpointer)
+    return graph.compile()
+
+
+def make_graph(config=None):
+    """Deployment entrypoint referenced by ``langgraph.json``.
+
+    LangGraph Platform calls this factory with a ``RunnableConfig`` and provides
+    its own persistence, so we build the graph *without* an explicit
+    checkpointer. Kept separate from ``build_graph`` so the self-hosted path
+    (which injects an ``AsyncPostgresSaver``) and the platform path never share
+    a first positional argument.
+    """
+    return build_graph()

@@ -16,13 +16,5 @@ services:
       timeout: 3s
       retries: 5
 
-  jaeger:
-    image: cr.jaegertracing.io/jaegertracing/jaeger:2.18.0
-    container_name: abhimart-jaeger
-    ports:
-      - "16686:16686" # Jaeger UI
-      - "4317:4317"   # OTLP gRPC traces
-      - "4318:4318"   # OTLP HTTP traces
-
 volumes:
   pgdata:

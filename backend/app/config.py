@@ -40,16 +40,6 @@ class Settings(BaseSettings):
     LANGSMITH_PROJECT: str = "abhimart"
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
 
-    # --- Observability ---
-    OTEL_ENABLED: bool = False
-    OTEL_SERVICE_NAME: str = "abhimart-backend"
-    OTEL_ENVIRONMENT: str = "local"
-    OTEL_EXPORTER: str = "console"
-    OTEL_OTLP_ENDPOINT: str = "http://localhost:4317"
-    OTEL_OTLP_INSECURE: bool = True
-    OTEL_METRICS_ENABLED: bool = False
-    OTEL_METRICS_EXPORTER: str = "prometheus"
-
 
 @lru_cache
 def get_settings() -> Settings:

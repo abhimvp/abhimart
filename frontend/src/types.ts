@@ -36,3 +36,30 @@ export type StreamPayload =
       type: "interrupt";
       interrupt: RefundInterrupt;
     };
+
+// --- Storefront ---
+
+export type ProductCategory = "electronics" | "appliances" | "fitness" | "books";
+
+export type Product = {
+  id: string;
+  name: string;
+  description: string;
+  // FastAPI may serialize the Decimal price as a number or a string,
+  // so accept both and coerce in the UI.
+  price: number | string;
+  category: ProductCategory;
+  sku: string;
+  stock_quantity: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ProductListResponse = {
+  items: Product[];
+  total: number;
+  page: number;
+  size: number;
+  pages: number;
+};
