@@ -149,9 +149,15 @@ Known weak points (state before interviewer finds them):
   reference-PDF mapping in [abhimart-v2/BLUEPRINT.md](abhimart-v2/BLUEPRINT.md);
   status in [abhimart-v2/PROGRESS_TRACKER.md](abhimart-v2/PROGRESS_TRACKER.md).
 
+## Current focus (2026-07-25)
+- Paused abhimart-v2 build (was at Stage 0.4c) to focus on **v1 interview prep**
+  before the deadline. v2 resume point: abhimart-v2/docs/BUILD_LOG.md Step 0.4d.
+- Next on v1: consolidated Interview Recall Pack + mock-interview drilling.
+
 ## Change log
 
 - 2026-07-24: Tracker created. Phase 0 + Phase 3 complete.
+- 2026-07-25: Paused v2; pivoted to v1 interview prep.
 - 2026-07-24: Drafted AbhiMart v2 blueprint (14 stages) + tracker from 3 core
   reference PDFs.
 - 2026-07-24: LangGraph Platform deploy alignment — added langgraph.json,
